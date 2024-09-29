@@ -13,3 +13,11 @@ Notably, music from the *Corona* mod gained widespread attention when it was fea
 ---
 
 MOD official download site: https://cor-games.com/resource
+
+
+---
+
+Currently, the code includes a fire control system for the *Athena Cannon* and an automatic evacuation system for the *Harbinger Gunship*. As development continues, more features and content may be added in future updates.
+
+---
+
