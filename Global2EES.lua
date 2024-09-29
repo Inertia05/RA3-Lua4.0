@@ -1,13 +1,64 @@
 -- HEES-READY
 -- "超时空避险系统(HEES)已就绪"
 -- END
+--- @type UnitCollection Gunship_table
+Gunship_table = { --- global variable should be defined BEFORE they are used since this code file run only once
+  [1] = {size = 0, time = {}},  -- Player 1
+  [2] = {size = 0, time = {}},  -- Player 2
+  [3] = {size = 0, time = {}},  -- Player 3
+  [4] = {size = 0, time = {}},  -- Player 4
+  [5] = {size = 0, time = {}},  -- Player 5
+  [6] = {size = 0, time = {}},  -- Player 6
 
---- @class HEES : EES_Base
+  filter_friendly = CreateObjectFilter({
+    Rule="ANY",
+    Relationship = "ALLIES",
+    IncludeThing={
+      "AlliedGunshipAircraft",
+    },
+  }),
+
+  filter_neutral = CreateObjectFilter({
+    IncludeThing={
+      "AlliedGunshipAircraft",
+    },
+  })
+}
+
+--- @type UnitCollection Interceptor_table
+Interceptor_table = {
+  [1] = {size = 0, time = {}},  -- Player 1
+  [2] = {size = 0, time = {}},  -- Player 2
+  [3] = {size = 0, time = {}},  -- Player 3
+  [4] = {size = 0, time = {}},  -- Player 4
+  [5] = {size = 0, time = {}},  -- Player 5
+  [6] = {size = 0, time = {}},  -- Player 6
+  filter_friendly = CreateObjectFilter({
+    Rule="ANY",
+    Relationship = "ALLIES",
+    IncludeThing={
+        "AlliedInterceptorAircraft",
+        "CelestialInterceptorAircraft",
+        "SovietInterceptorAircraft",
+    },
+  }),
+  filter_neutral = CreateObjectFilter({
+    IncludeThing={
+        "AlliedInterceptorAircraft",
+        "CelestialInterceptorAircraft",
+        "SovietInterceptorAircraft",
+    },
+  }),
+}
+---------- @class HEES : EES_Base -- there is no check on if HEES have function as required by EES_Base, 
+-----------Hence we use type instead of class so EmmyLua can still provide some help
 --- The Hyperspace Emergency Evacuation System, specific to Gunship units.
+--- @type EES_Base
 local HEES = {
   name = "HEES",
   _display_cooldown = 0,
   _MAX_COOLDOWN = 10,
+  _EVAC_UNIT_TABLE = Gunship_table, --- global variable should be used AFTER they are defined since this code file run only once
 
   --- Check if the system's UI should be displayed.
   --- @return boolean
@@ -29,7 +80,7 @@ local HEES = {
   --- @param unit_index_in_table number
   --- @return boolean
   canEvacuate = function(self, player_index, unit_index_in_table)
-      local hyper_space_cool_down = Gunship_table[player_index].time[unit_index_in_table]
+      local hyper_space_cool_down = self._EVAC_UNIT_TABLE[player_index].time[unit_index_in_table]
       return hyper_space_cool_down == 0
   end,
 
@@ -41,7 +92,7 @@ local HEES = {
   evacuateUnit = function(self, unit, player_index, player_start, unit_index_in_table)
       UnitMoveToNamedWaypoint(unit, player_start)
       UnitUseAbility(unit, "Command_AlliedGunshipAircraftHyperSpaceMove")
-      Gunship_table[player_index].time[unit_index_in_table] = 60
+      self._EVAC_UNIT_TABLE[player_index].time[unit_index_in_table] = 60
       UnitShowInfoBox(unit, "HEES-ACTIVE", 5)
   end,
 
@@ -49,25 +100,58 @@ local HEES = {
   --- @param player_index number
   --- @param unit_index_in_table number
   updateCooldown = function(self, player_index, unit_index_in_table)
-      local hyper_space_cool_down = Gunship_table[player_index].time[unit_index_in_table]
+      local hyper_space_cool_down = self._EVAC_UNIT_TABLE[player_index].time[unit_index_in_table]
       if hyper_space_cool_down == 0 then
           return
       end
       if hyper_space_cool_down > 0 then
-          Gunship_table[player_index].time[unit_index_in_table] = hyper_space_cool_down - 1
+          self._EVAC_UNIT_TABLE[player_index].time[unit_index_in_table] = hyper_space_cool_down - 1
       else
-          Gunship_table[player_index].time[unit_index_in_table] = 0
+          self._EVAC_UNIT_TABLE[player_index].time[unit_index_in_table] = 0
           _ALERT("FCS_Running_Data.HEES.updateCooldown: hyper_space_cool_down < 0 bug detected")
       end
   end
 }
 
+
+
+
+--- The Interceptor Emergency Evacuation System, specific to Interceptor units.
+--- @type EES_Base
+local IEES = {
+  name = "IEES",
+  _display_cooldown = 0,
+  _MAX_COOLDOWN = 10,
+  _EVAC_UNIT_TABLE = Interceptor_table, 
+  
+
+}
+
+
 --- @class EES_Running_Data
 EES_Running_Data = {
   --- Data related to the HEES system (Hyperspace Emergency Evacuation System)
   
-  --- @type HEES
+  --- @type EES_Base
   HEES = HEES,
+
+
+  --- Cooldown Update:
+  --- evac_data:updateCooldownUI() updates the system's cooldown display.
+  --- 
+  --- Evacuation Check:
+  --- For each unit, evac_data:canEvacuate() determines if the unit is eligible for evacuation.
+  --- 
+  --- UI Display:
+  --- If evacuation is possible, evac_data:shouldDisplaySystemUI() checks if the system's UI should be displayed. 
+  --- If true, and the unit's stance is "hold fire" or "hold position," the system status is shown.
+  --- System is designed to only be active when the unit is in these stances.
+
+  --- Evacuation Execution:
+  --- evac_data:evacuateUnit() evacuates the unit if it's damaged and meets the correct stance requirements.
+
+  --- Cooldown Update for Units:
+  --- After processing, evac_data:updateCooldown() adjusts the cooldown for each unit.
 
   --- Function to manage the evacuation system for units (e.g., gunships, fighters)
   --- This function is called every scond to process the evacuation decision for each unit.
@@ -157,54 +241,6 @@ EES_Running_Data = {
 }
 
 
---- @type UnitCollection Gunship_table
-Gunship_table = {
-  [1] = {size = 0, time = {}},  -- Player 1
-  [2] = {size = 0, time = {}},  -- Player 2
-  [3] = {size = 0, time = {}},  -- Player 3
-  [4] = {size = 0, time = {}},  -- Player 4
-  [5] = {size = 0, time = {}},  -- Player 5
-  [6] = {size = 0, time = {}},  -- Player 6
 
-  filter_friendly = CreateObjectFilter({
-    Rule="ANY",
-    Relationship = "ALLIES",
-    IncludeThing={
-      "AlliedGunshipAircraft",
-    },
-  }),
-
-  filter_neutral = CreateObjectFilter({
-    IncludeThing={
-      "AlliedGunshipAircraft",
-    },
-  })
-}
-
---- @type UnitCollection Interceptor_table
-Interceptor_table = {
-  [1] = {size = 0, time = {}},  -- Player 1
-  [2] = {size = 0, time = {}},  -- Player 2
-  [3] = {size = 0, time = {}},  -- Player 3
-  [4] = {size = 0, time = {}},  -- Player 4
-  [5] = {size = 0, time = {}},  -- Player 5
-  [6] = {size = 0, time = {}},  -- Player 6
-  filter_friendly = CreateObjectFilter({
-    Rule="ANY",
-    Relationship = "ALLIES",
-    IncludeThing={
-        "AlliedInterceptorAircraft",
-        "CelestialInterceptorAircraft",
-        "SovietInterceptorAircraft",
-    },
-  }),
-  filter_neutral = CreateObjectFilter({
-    IncludeThing={
-        "AlliedInterceptorAircraft",
-        "CelestialInterceptorAircraft",
-        "SovietInterceptorAircraft",
-    },
-  }),
-}
 
 

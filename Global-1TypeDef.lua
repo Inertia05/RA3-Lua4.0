@@ -4,7 +4,7 @@
 --- @class StandardUnitType
 -- This represents a standard unit type used across the game, details are hidden away.
 -- This is actually a table that hold the unit's GUID which is unique and invariant for the unit.
--- The table retrived from game engine however is not invariant and can change over time.
+-- The table retrived from game engine(ex: through ) however is not invariant and can change over time.
 -- Assume this class handles all unit interactions and is referenced across multiple functions.
 
 --- @class ObjectFilter
@@ -47,7 +47,53 @@
 --- @field name string The name of the evacuation system
 --- @field _display_cooldown number The current cooldown for UI display
 --- @field _MAX_COOLDOWN number The maximum cooldown value
+--- @field _EVAC_UNIT_TABLE UnitCollection The unit collection for evacuation
+--- @field shouldDisplaySystemUI fun(self: EES_Base):boolean Function to check if the UI should be displayed
+--- @field updateCooldownUI fun(self: EES_Base) Function to update the UI cooldown
+--- @field canEvacuate fun(self: EES_Base, player_index: number, unit_index_in_table: number):boolean Function to check if the unit can evacuate
+--- @field evacuateUnit fun(self: EES_Base, unit: any, player_index: number, player_start: string, unit_index_in_table: number) Function to evacuate the unit
+--- @field updateCooldown fun(self: EES_Base, player_index: number, unit_index_in_table: number) Function to update the evacuation cooldown
+
 local EES_Base = {
+    --- @type string
+    name = "",
+
+    --- @type number
+    _display_cooldown = 0,
+
+    --- @type number
+    _MAX_COOLDOWN = 10,
+
+    --- @type UnitCollection
+    _EVAC_UNIT_TABLE = {
+        [1] = {
+            size = 0,
+            time = {},
+        },
+        [2] = {
+            size = 0,
+            time = {},
+        },
+        [3] = {
+            size = 0,
+            time = {},
+        },
+        [4] = {
+            size = 0,
+            time = {},
+        },
+        [5] = {
+            size = 0,
+            time = {},
+        },
+        [6] = {
+            size = 0,
+            time = {},
+        },
+        filter_friendly = {},
+        filter_neutral = {}
+    },
+
     --- Function to check if the UI should be displayed
     --- @return boolean
     shouldDisplaySystemUI = function(self) return false end,
