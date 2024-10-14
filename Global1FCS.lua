@@ -1,13 +1,44 @@
 --- @module "Global0VarFun" 
+if Global0VarFun == nil then
+    if exMessageAppendToMessageArea then
+        exMessageAppendToMessageArea("CRITICAL ERROR: Global0VarFun.lua is missing, reported by Global1FCS.lua")
+    else
+        _ALERT("CRITICAL ERROR: Global0VarFun.lua is missing, reported by Global1FCS.lua")
+    end
+end
+if DEBUG_CORONA_INE then
+    if not LOADED_FILES[0] then
+        _ALERT("ERROR: Global0VarFun.lua must be loaded before Global1FCS.lua")
+    else
+        LOADED_FILES[1] = true
+    end
+end
+DEBUG_ATFACS_ACTIVE = false
+DEBUG_CSFAS_ACTIVE = false
 -- AOLSCS-ACTIVE
--- "盟军轨道激光打击协调系统(AOLSCS)运行中"
+-- "盟军轨道激光打击协调系统(AOLSCS)已启动, 取消固守模式以关闭"
 -- END
 
 -- STBMFAS-ACTIVE
--- "苏军战术弹道导弹火力分配系统(STBMFAS)工作中"
+-- "苏军战术弹道导弹火力分配系统(STBMFAS)已启动, 取消固守模式以关闭"
 -- END
 
+-- CSFAS-ACTIVE
+-- "神州亚轨道火力分配系统(CSFAS)已启动, 取消固守模式以关闭"
+-- END
 
+-- ATFACS-ACTIVE
+-- "盟军战术火力分配与协调系统(ATFACS)已启动, 取消固守模式以关闭"
+-- END
+
+--- @type FCSName[]
+local fcs_list = {}
+fcs_list[1] = "AOLSCS"
+fcs_list[2] = "STBMFAS"
+fcs_list[3] = "CSFAS"
+fcs_list[4] = "ATFACS"
+
+local fcs_list_size = getn(fcs_list)
 
 --- FCS_Running_Data manages the timing and target allocation for different FCS systems.
 ---@type FCS_Running_Data
@@ -19,11 +50,20 @@ FCS_Running_Data = {
     _GLOBAL_TIMER_MAX = 60,
 
     --- Constant values for target allocation reset intervals (in seconds)
-    _TARGET_ALLOCATION_RESET_INTERVAL = {AOLSCS = 10, STBMFAS = 10, CSFAS = 10, ATFACS = 15},
+    _TARGET_ALLOCATION_RESET_INTERVAL = {
+        AOLSCS = 10, -- Laser attack interval is 10 seconds
+        STBMFAS = 10, 
+        CSFAS = 10, 
+        ATFACS = 5, -- Reload is 15 seconds, but we want to search for new targets every 5 seconds
+    },
 
     --- Constant values for artillery stance info reset intervals (in seconds)
-
-    _ARTILLERY_STANCE_RESET_INTERVAL = {AOLSCS = 15, STBMFAS = 15, CSFAS = 30, ATFACS = 30},
+    _ARTILLERY_STANCE_RESET_INTERVAL = { -- Max system activation/deactivation reaction time
+    -- ex, for reset interval = 15
+    -- if stance change to active at t = 14, then the system will be activated at t = 15, reaction time = 1
+    -- if stance change to active at t = 1, then the system will still be activated at t = 15, reaction time = 14
+        AOLSCS = 15, STBMFAS = 15, CSFAS = 30, ATFACS = 30
+    },
 
 
     -- assigned in Global3FCSs.lua
@@ -33,6 +73,8 @@ FCS_Running_Data = {
     CSFAS = nil,
     --- @type FCS
     ATFACS = nil,
+    --- @type FCS
+    STBMFAS = nil,
 
 
 
@@ -171,9 +213,15 @@ FCS_Running_Data = {
         local cx, cy, cz = FCS_Running_Data:_calculate_FCS_Group_center(fcs_group, fcs_group_size)
         local matchedTargets, target_count = Area_enemy_search_surface_only(cx, cy, cz, max_radius, current)
         if target_count == 0 then
+            -- if DEBUG_CORONA_INE then
+            --     _ALERT("_allocateTargetsToGroup: No targets found for player "..player_index..", fcs = "..fcs)
+            -- end
             return -- no targets to allocate. Time to relax 
         end
         matchedTargets, target_count = Area_enemy_search_surface_only(cx, cy, cz, guaranteed_radius, current)
+        if DEBUG_CORONA_INE and target_count == 0 then
+            _ALERT("_allocateTargetsToGroup: No targets found in guaranteed radius for player "..player_index..", fcs = "..fcs)
+        end
         --- @type FCS
         local fcs_data = FCS_Running_Data[fcs]
         local target_marked_count = 0
@@ -214,13 +262,14 @@ FCS_Running_Data = {
     groupArtilleryAndAllocateTargets = function (self, player_index, fcs)
         local rebuild_table = false
         local artillery_grouped = {}
+        local debug_system_active = false
         --- @type FCS
         local fcs_data = FCS_Running_Data[fcs]
         local artillery_table = fcs_data.artillery_table
         local size = artillery_table[player_index].size
-        if DEBUG_CORONA_INE and size > 1 then
-            _ALERT("groupArtilleryAndAllocateTargets: player_index = "..player_index..", fcs = "..fcs)
-        end
+        -- if DEBUG_CORONA_INE and size > 1 then
+        --     _ALERT("groupArtilleryAndAllocateTargets: player_index = "..player_index..", fcs = "..fcs)
+        -- end
         local artillery_range = fcs_data.artillery_range
         local artillery_grouping_range_threshold = fcs_data.artillery_grouping_range_threshold
         for i = 1, size, 1 do
@@ -238,14 +287,33 @@ FCS_Running_Data = {
                     local fcs_group, fcs_group_size = self:_findAndGroupNearbyUnits(current, 
                     artillery_grouping_range_threshold, artillery_grouped, 
                     player_index, fcs, artillery_table)
-                    
                     if fcs_group_size > 1 then
                         -- process the group
                         self:_allocateTargetsToGroup (fcs_group, fcs_group_size, artillery_range, current, player_index, fcs)
+                        if DEBUG_CORONA_INE then 
+                            if not DEBUG_ATFACS_ACTIVE and fcs == "ATFACS" then
+                                _ALERT(fcs.."System activated for group size = "..fcs_group_size..", player index = "..player_index)
+                                DEBUG_ATFACS_ACTIVE = true
+                            end
+                            if not DEBUG_CSFAS_ACTIVE and fcs == "CSFAS" then
+                                _ALERT(fcs.."System activated for group size = "..fcs_group_size..", player index = "..player_index)
+                                DEBUG_CSFAS_ACTIVE = true
+                            end
+                        end
                     else
                         -- process the individual unit(size 1 group)
                         local current_target = ObjectFindTarget(current)
                         if fcs_data:canAllocateArtillery(current, current_target) then
+                            if DEBUG_CORONA_INE then
+                                if not DEBUG_ATFACS_ACTIVE and fcs == "ATFACS" then
+                                    _ALERT(fcs.."System activated for individual unit, player index = "..player_index)
+                                    DEBUG_ATFACS_ACTIVE = true
+                                end
+                                if not DEBUG_CSFAS_ACTIVE and fcs == "CSFAS" then
+                                    _ALERT(fcs.."System activated for individual unit, player index = "..player_index)
+                                    DEBUG_CSFAS_ACTIVE = true
+                                end
+                            end
                             local x, y, z = ObjectGetPosition(current)
                             local matchedTargets, target_count = Area_enemy_search_surface_only(x, y, z, artillery_range, current)
                             if FCS_Active_Display:isDisplayAllowed(player_index, fcs) then
@@ -255,6 +323,9 @@ FCS_Running_Data = {
                                 local target = matchedTargets[target_index]
                                 if fcs_data:canAllocateTarget(target) then
                                     fcs_data:allocateArtilleryToTarget(current, target)
+                                    if DEBUG_CORONA_INE then
+                                        _ALERT("Individual unit allocated, player index = "..player_index..", fcs = "..fcs)
+                                    end
                                     break
                                 end
                             end
@@ -310,17 +381,30 @@ FCS_Running_Data = {
         end
         return group_radius
     end,
+
+    --- Main function to run the FCS system
+    --- @param self FCS_Running_Data
+    --- @param fcs FCSName
+    runFCS = function (self, fcs)
+        if self:isTimeToResetTargetAllocation(fcs) then
+            self:resetTargetAllocation(fcs)
+            -- if DEBUG_CORONA_INE then
+            --     _ALERT("Target allocation reset for " .. fcs)
+            -- end
+        end
+        if self:isTimeToResetArtilleryStanceInfo(fcs) then
+            self:resetArtilleryStanceInfo(fcs)
+            -- if DEBUG_CORONA_INE then
+            --     _ALERT("Artillery stance info reset for " .. fcs)
+            -- end
+        end
+        for player_index = 1, 6, 1 do
+            self:groupArtilleryAndAllocateTargets(player_index, fcs)
+        end
+    end
 }
 
---- @type FCSName[]
-local fcs_list = {
-    "AOLSCS",
-    --"STBMFAS",
-    "CSFAS",
-    "ATFACS",
-}
 
-local fcs_list_size = getn(fcs_list)
 
 ---@return table<FCSName, table<string, number>>
 local createFCSTimerTable = function(fcs_list, size)
@@ -434,9 +518,6 @@ FCS_Active_Display = {
         end
     end,
 }
-
-
-
 
 
 

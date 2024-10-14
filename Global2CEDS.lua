@@ -1,4 +1,18 @@
 --- @module "Global0VarFun"
+if Global0VarFun == nil then
+    if exMessageAppendToMessageArea then
+        exMessageAppendToMessageArea("CRITICAL ERROR: Global0VarFun.lua is missing, reported by Global2CEDS.lua")
+    else
+        _ALERT("CRITICAL ERROR: Global0VarFun.lua is missing, reported by Global2CEDS.lua")
+    end
+end
+if DEBUG_CORONA_INE then
+    if not LOADED_FILES[1] then
+        _ALERT("ERROR: Global1FCS.lua must be loaded before Global2CEDS.lua")
+    else
+        LOADED_FILES[2] = true
+    end
+end
 --- Conditional Evacuation and Deselection System (CEDS)
 --- Two components: Conditional Evacuation System (CES) and Conditional Deselection System (CDS) 
 
@@ -264,7 +278,9 @@ function CreateEES(evac_table, evac_command, unit_type)
 
     canEvacuate = function(self, player_index, unit_index_in_table)
         local evac_cool_down = self._EVAC_UNIT_TABLE[player_index].time[unit_index_in_table]
-        return evac_cool_down == 0
+        local unit = self._EVAC_UNIT_TABLE[player_index][unit_index_in_table]
+        local cleared_for_landing = ObjectStatusIs( unit, "CLEARED_FOR_LANDING" )
+        return evac_cool_down == 0 and (not cleared_for_landing)
     end,
 
     shouldEvacuateConservative = function(self, unit)
@@ -284,6 +300,8 @@ function CreateEES(evac_table, evac_command, unit_type)
     end,
 
     evacuateUnit = function(self, unit, player_index, player_start, unit_index_in_table)
+        UnitMoveToNamedWaypoint(unit, player_start)
+        -- In case there is no airport to return to, the unit will head back to the starting point
         UnitUseAbility(unit, self._EVAC_COMMAND)
         self:_resetCooldown(player_index, unit_index_in_table)
         UnitShowInfoBox(unit, self.evac_text, 5)
@@ -415,7 +433,7 @@ EES_Running_Data = {
   --- After processing, evac_data:updateCooldown() adjusts the cooldown for each unit.
 
   --- Function to manage the evacuation system for units (e.g., gunships, fighters)
-  --- This function is called every scond to process the evacuation decision for each unit.
+  --- This function is called every second to process the evacuation decision for each unit.
   --- @param self EES_Running_Data (automatically passed when using ':').
   --- @param evac_system EES_Base The spcific evacuation system (e.g., EES_Running_Data.HEES)
   --- @param unit_table UnitCollection The table containing the units (e.g., Gunship_table).
@@ -541,7 +559,6 @@ EES_Running_Data = {
   end,
 
 }
-
 
 
 

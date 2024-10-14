@@ -146,6 +146,7 @@
 ---@field AOLSCS FCS The FCS object for AOLSCS
 ---@field CSFAS FCS The FCS object for CSFAS
 ---@field ATFACS FCS The FCS object for ATFACS
+---@field STBMFAS FCS The FCS object for STBMFAS
 ---@field updateTimers fun(self: FCS_Running_Data) Function to update the global timer
 ---@field getGlobalTimer fun(self: FCS_Running_Data): number Function to retrieve the current value of the global timer
 ---@field isTimeToResetArtilleryStanceInfo fun(self: FCS_Running_Data, fcs: FCSName): boolean Function to check if it's time to reset artillery stance info
@@ -157,3 +158,4 @@
 ---@field groupArtilleryAndAllocateTargets fun(self: FCS_Running_Data, player_index: integer, fcs: FCSName) Function to group and allocate targets for the artillery
 ---@field _calculate_FCS_Group_center fun(self: FCS_Running_Data, fcs_group: StandardUnitType[], fcs_group_size: integer): number, number, number Function to calculate the center of the artillery group
 ---@field _calculate_FCS_Group_radius function fun(self: FCS_Running_Data, fcs_group: StandardUnitType[], fcs_group_size: integer): number Function to calculate the radius of the artillery group
+---@field runFCS fun(self: FCS_Running_Data, fcs_name: FCSName) Function to run the FCS system

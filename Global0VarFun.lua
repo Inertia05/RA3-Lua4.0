@@ -1,5 +1,7 @@
 --- @module "Global-1TypeDef"
-local new = require("table.new")
+DEBUG_CORONA_INE = false
+Global0VarFun = 1
+-- exMessageAppendToMessageArea("Global0VarFun.lua loading started")
 -- **********************************Important**********************************
 -- This function override the LUA interal error handling function and redirect the error message to the debug console
 -- This is critical for debugging runtime error in the game
@@ -16,11 +18,23 @@ function _ALERT(s)
     ExecuteAction("DEBUG_STRING", "Lua Alert: " .. (s or "no debug message"))
 end
 
-DEBUG_CORONA_INE = false
--- *****************************************************************************
---注意LUA全局变量需要退出当前游戏才会确保重置，游戏内直接点击重新开始游戏有概率不会重置
---多个代码文件的执行顺序和地编中脚本执行顺序相同，上面的先执行，下面的后执行
-
+LOADED_FILES = {
+  [0] = false, -- Global0VarFun.lua
+  [1] = false, -- Global1FCS.lua
+  [2] = false, -- Global2CEDS.lua
+  [3] = false, -- Global3FCSs.lua
+}
+if DEBUG_CORONA_INE then
+  _ALERT("Loading Global0VarFun.lua")
+  LOADED_FILES[0] = true
+end
+--- *****************************************************************************************
+--- 注意LUA全局变量需要退出当前游戏才会确保重置，游戏内直接点击重新开始游戏有概率不会重置
+--- *****疑似需要退出房间重新进入才会重置*****
+--- 多个代码文件的执行顺序和地编中脚本执行顺序相同，上面的先执行，下面的后执行
+--- *****************************************************************************************
+--- *******!!!注意,已确认逆天EA把LUA4.0的 == operator覆写了， false == nil 会返回true !!!!!!!!**
+--- *****************************************************************************************
 --注意全局变量的SCOPE包含了整张地图，所有上下级的文件夹内的LUA文件都共享同一个SCOPE，所以要注意变量名的冲突
 --Everything without a local keyword is global!!!!!!
 -- loop control variable i in loop is the only exception, it is local by default
@@ -392,7 +406,7 @@ end
 --- This function check if the object has the status
 --- The status is a string, such as "DAMAGED", "REALLYDAMAGED", "REPAIR_ALLIES_WHEN_IDLE"
 --- @param current StandardUnitType
---- @param status "IMMOBILE"|"IGNORE_AI_COMMAND"|"REPAIR_ALLIES_WHEN_IDLE"  -- "DAMAGED" | "REALLYDAMAGED" |
+--- @param status "IMMOBILE"|"IGNORE_AI_COMMAND"|"REPAIR_ALLIES_WHEN_IDLE"|"CLEARED_FOR_LANDING"  -- "DAMAGED" | "REALLYDAMAGED" |
 --- @return boolean
 function ObjectStatusIs(current, status)
   local filter = CreateObjectFilter({
@@ -573,6 +587,13 @@ function UnitUseAbilityOnTarget(current, ability_name, target)
   ExecuteAction("NAMED_USE_COMMANDBUTTON_ABILITY_ON_NAMED", current, ability_name, target_reference)
 end
 
+--- This function check if the unit is ready to use the special ability
+--- @param current StandardUnitType
+--- @param special_ability_name "SpecialPower_AlliedFutureTankLaserWeapon"
+function UnitSpecialAbilityReady_Slow(current, special_ability_name)
+  return EvaluateCondition("UNIT_SPECIAL_POWER_READY", current, special_ability_name)
+end
+
 
 -- 这个函数只在ObjectTestTargetObjectWithFilter的if语句中使用，用于将当前单位加入到对应的Global table中
 function _Add_Current_to_Table(table, current)
@@ -671,3 +692,4 @@ function _Rebuild_Table_with_Nils_Removed(table, player_index)
   table[player_index].size = new_size
 end
 
+-- exMessageAppendToMessageArea("Global0VarFun.lua loading completed")
