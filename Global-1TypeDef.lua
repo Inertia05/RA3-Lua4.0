@@ -1,11 +1,21 @@
---- 全部是类型定义，不需要执行，仅负责帮助IDE识别类型并提供代码提示
+--- This file is for type definition only, it is not executable code.
+--- It is used to define the types of the functions and variables used in the code.
 
 
 --- @class StandardUnitType
+--- @field GUID UnitID The GUID of the unit, which is unique and invariant for the unit
+-- ---Note this field name is just for illustration, the actual field name is hidden away.
 -- This represents a standard unit type used across the game, details are hidden away.
 -- This is actually a table that hold the unit's GUID which is unique and invariant for the unit.
 -- The table retrived from game engine(ex: through ) however is not invariant and can change over time.
 -- Assume this class handles all unit interactions and is referenced across multiple functions.
+
+
+--- @alias UnitID number
+--- The actual value stored in the StandardUnitType table
+--- This is the GUID of the unit, which is unique and invariant for the unit.
+--- This is the actual value stored in the StandardUnitType table.
+--- Value can be retrived by ObjectGetId(unit) function.
 
 --- @class ObjectFilter
 -- This represents a filter object, which is used to filter specific units or objects based on some criteria.
@@ -13,8 +23,11 @@
 
 
 --- @class PlayerUnitTable
---- @field size number The number of units for the player
---- @field time table<number, number> An optional table to track cooldown times (optional)
+--- @field size integer The number of units for the player
+--- @field time number[] A table to track cooldown times (leave empty if not needed)
+--- @field unit_id UnitID[] A table to track the unit IDs (leave empty if not needed)
+--- @field evac_dict table<UnitID, boolean> A table to track if the unit is in evac state (leave empty if not needed)
+--- @field cooldown_dict table<UnitID, number> A table to track the cooldown for each unit (leave empty if not needed)
 --- @field [number] StandardUnitType The actual units in the player's table
 
 
@@ -27,6 +40,7 @@
 --- @field [6] PlayerUnitTable
 --- @field filter_friendly ObjectFilter The friendly filter
 --- @field filter_neutral ObjectFilter The neutral filter
+--- @field unit_name? string The name of the unit collection
 
 
 --- note:
@@ -45,80 +59,50 @@
 --- @class EES_Base
 --- Base class for all Evacuation Systems (e.g., HEES, FighterEvac)
 --- @field name string The name of the evacuation system
+--- @field evac_text string The text to display when evacuating
+--- @field standby_text string The text to display when in standby
 --- @field _display_cooldown number The current cooldown for UI display
+--- @field _DISPLAY_DURATION number The duration for UI display
+--- @field _MAX_COOLDOWN_UI number The maximum cooldown for UI display
 --- @field _MAX_COOLDOWN number The maximum cooldown value
 --- @field _EVAC_UNIT_TABLE UnitCollection The unit collection for evacuation
+--- @field _EVAC_COMMAND string The evacuation command
 --- @field shouldDisplaySystemUI fun(self: EES_Base):boolean Function to check if the UI should be displayed
+--- @field displaySystemUI fun(self: EES_Base, unit:StandardUnitType) Function to display the UI
 --- @field updateCooldownUI fun(self: EES_Base) Function to update the UI cooldown
---- @field canEvacuate fun(self: EES_Base, player_index: number, unit_index_in_table: number):boolean Function to check if the unit can evacuate
---- @field evacuateUnit fun(self: EES_Base, unit: any, player_index: number, player_start: string, unit_index_in_table: number) Function to evacuate the unit
---- @field updateCooldown fun(self: EES_Base, player_index: number, unit_index_in_table: number) Function to update the evacuation cooldown
+--- @field canEvacuate fun(self: EES_Base, player_index: number, unit_index_in_table: number):boolean Function to check if the unit can evac by checking unit cooldown timer
+--- @field shouldEvacuateConservative fun(self: EES_Base, unit:StandardUnitType):boolean Function to check if the unit should evacuate, conservative approach
+--- @field shouldEvacuateAggressive   fun(self: EES_Base, unit:StandardUnitType):boolean Function to check if the unit should evacuate, aggressive approach
+--- @field isEvacAllowedByStance      fun(self: EES_Base, unit:StandardUnitType):boolean Function to check if the unit can evacuate based on stance
+--- @field isEvacAllowedByStanceDefensive fun(self: EES_Base, unit:StandardUnitType):boolean Function to check if the unit can evacuate based on more defensive stance
+--- @field evacuateUnit          fun(self: EES_Base, unit:StandardUnitType, player_index: number, player_start: string, unit_index_in_table: number) Function to evacuate the unit
+--- @field canCompleteEvacuation fun(self: EES_Base, unit:StandardUnitType, player_index: number):boolean Function to check if the evacuation can be completed
+--- @field completeEvacuation    fun(self: EES_Base, unit:StandardUnitType, player_index: number, unit_index_in_table:number) Function to complete the evacuation
+--- @field updateCooldown        fun(self: EES_Base, player_index: number, unit_index_in_table: number) Function to update the evacuation cooldown for the unit
+--- @field _resetCooldown        fun(self: EES_Base, player_index: number, unit_index_in_table: number) Function to reset the evacuation cooldown for the unit
+--- @field _getUnitIDFromTable   fun(self: EES_Base, player_index: number, unit_index_in_table: number):UnitID|nil Function to get the stored unit ID
+--- @field _updateEvacStatus     fun(self: EES_Base, player_index: number, unit_id: UnitID|nil, value:boolean) Function to set the evac dictionary value
+--- @field getUnitEvacStatus     fun(self: EES_Base, player_index: number, unit_id: UnitID|nil):boolean|nil Function to get the evac status of the unit
 
-local EES_Base = {
-    --- @type string
-    name = "",
 
-    --- @type number
-    _display_cooldown = 0,
+--- FCS Name Enum
+--- @alias FCSName "AOLSCS"|"CSFAS"|"ATFACS"|"STBMFAS"|
 
-    --- @type number
-    _MAX_COOLDOWN = 10,
+--- @alias Stance 0|1|2|3|4 -- Stance enum, 0: Other, 1: Aggressive, 2: Guard, 3: HoldPosition, 4: HoldFire
 
-    --- @type UnitCollection
-    _EVAC_UNIT_TABLE = {
-        [1] = {
-            size = 0,
-            time = {},
-        },
-        [2] = {
-            size = 0,
-            time = {},
-        },
-        [3] = {
-            size = 0,
-            time = {},
-        },
-        [4] = {
-            size = 0,
-            time = {},
-        },
-        [5] = {
-            size = 0,
-            time = {},
-        },
-        [6] = {
-            size = 0,
-            time = {},
-        },
-        filter_friendly = {},
-        filter_neutral = {}
-    },
-
-    --- Function to check if the UI should be displayed
-    --- @return boolean
-    shouldDisplaySystemUI = function(self) return false end,
-
-    --- Function to update the UI cooldown
-    updateCooldownUI = function(self) end,
-
-    --- Function to check if the unit can evacuate
-    --- @param self EES_Base
-    --- @param player_index number
-    --- @param unit_index_in_table number
-    --- @return boolean
-    canEvacuate = function(self, player_index, unit_index_in_table) return false end,
-
-    --- Function to evacuate the unit
-    --- @param self EES_Base
-    --- @param unit any
-    --- @param player_index number
-    --- @param player_start string
-    --- @param unit_index_in_table number
-    evacuateUnit = function(self, unit, player_index, player_start, unit_index_in_table) end,
-
-    --- Function to update the evacuation cooldown
-    --- @param self EES_Base
-    --- @param player_index number
-    --- @param unit_index_in_table number
-    updateCooldown = function(self, player_index, unit_index_in_table) end
-}
+--- General Fire Control System (FCS) type
+---@class FCS
+---@field name FCSName The name of the FCS system
+---@field artillery_table UnitCollection The table of artillery units
+---@field artillery_range number The range of the artillery
+---@field artillery_grouping_range_threshold number The threshold for grouping the artillery
+---@field target_allocated_dict table<UnitID, boolean> Dictionary to store allocated targets
+---@field artillery_allocated_dict table<UnitID, boolean> Dictionary to store artillery that has been assigned to a target
+---@field artillery_stance_dict table<UnitID, Stance> Dictionary to store the stance of the artillery
+---@field canAllocateTarget fun(self: FCS, target: any): boolean Function to check if the target can be allocated
+---@field canAllocateArtillery fun(self: FCS, artillery: StandardUnitType, current_target: StandardUnitType|nil, player_index: integer): boolean Function to check status of artillery to determine if it can be allocated
+---@field allocateArtilleryToTarget fun(self: FCS, artillery: StandardUnitType, target: StandardUnitType, player_index: integer) Function to allocate artillery to a target
+---@field isTargetAllocated fun(self: FCS, target: any): boolean Function to check if the target is already allocated
+---@field isArtilleryAllocated fun(self: FCS, artillery: StandardUnitType): boolean Function to check if the artillery is already allocated
+---@field _getArtilleryStance fun(self: FCS, artillery: StandardUnitType): Stance Function to get the stance of the artillery and update it if it is not in the dictionary
+---@field _orderAttack fun(self: FCS, artillery: StandardUnitType, target: StandardUnitType) Function to order the artillery to attack the target

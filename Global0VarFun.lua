@@ -1,11 +1,23 @@
+local new = require("table.new")
 -- **********************************Important**********************************
 -- This function override the LUA interal error handling function and redirect the error message to the debug console
 -- This is critical for debugging runtime error in the game
 function _ALERT(s)
-  ExecuteAction("DEBUG_STRING", "Lua Alert: " .. (s or "no debug message"))
+  if exMessageAppendToMessageArea then
+    -- Alert function in new version of Corona mod. It directly print the message to the message area in the game
+    exMessageAppendToMessageArea("LUA ALERT: " .. s)
+  end
+  if exPrintln then
+    -- Alert function in new version of Corona mod. It directly print the message to the debug console
+    exPrintln("LUA exPrintln ALERT: " .. s)
+  end
+    -- Alert function in old version of Corona mod. It print the message to the debug console
+    ExecuteAction("DEBUG_STRING", "Lua Alert: " .. (s or "no debug message"))
 end
+
+DEBUG_CORONA_INE = false
 -- *****************************************************************************
---注意LUA全局变量需要退出当前游戏才会重置，游戏内直接点击重新开始游戏不会重置
+--注意LUA全局变量需要退出当前游戏才会确保重置，游戏内直接点击重新开始游戏有概率不会重置
 --多个代码文件的执行顺序和地编中脚本执行顺序相同，上面的先执行，下面的后执行
 
 --注意全局变量的SCOPE包含了整张地图，所有上下级的文件夹内的LUA文件都共享同一个SCOPE，所以要注意变量名的冲突
@@ -368,13 +380,38 @@ end
 -- *******************************尽量减少这两个函数的调用次数**************************
 -- ***********************************************************************************
 
+
+--- This function check if the object has the status
+--- The status is a string, such as "DAMAGED", "REALLYDAMAGED", "REPAIR_ALLIES_WHEN_IDLE"
+--- @param current StandardUnitType
+--- @param status "IMMOBILE"|"IGNORE_AI_COMMAND"|"REPAIR_ALLIES_WHEN_IDLE"  -- "DAMAGED" | "REALLYDAMAGED" |
+--- @return boolean
+function ObjectStatusIs(current, status)
+  local filter = CreateObjectFilter({
+    Rule="ALL",
+    IncludeThing = {},
+    StatusBitFlags = status, -- Ex: "REPAIR_ALLIES_WHEN_IDLE",
+  })
+  return ObjectTestTargetObjectWithFilter(nil, current, filter)
+end
+
+-- This function check if the object is damaged(health bar is not full)
+---@param current StandardUnitType
+function ObjectStatusIsDamaged(current)
+  local health = ObjectGetCurrentHealth(current) -- 当前血量
+  local initialHealth = ObjectGetInitialHealth(current) -- 初始血量
+  return health < initialHealth
+end
+
 -- This function check if the object is lightly damaged(health bar is yellow)
-function ObjectStatusIsDamaged_Slow(current)
+---@param current StandardUnitType
+function ObjectStatusIsLightlyDamaged_Slow(current)
   return EvaluateCondition("UNIT_HAS_OBJECT_STATUS", current, "DAMAGED")
 end
 
 --100-66绿血， 65-33黄血， 32-0红血
-function ObjectStatusIsDamaged(current)
+---@param current StandardUnitType
+function ObjectStatusIsLightlyDamaged(current)
   local health = ObjectGetCurrentHealth(current) -- 当前血量
   local initialHealth = ObjectGetInitialHealth(current) -- 初始血量
   local healthPercentage = health / initialHealth -- 血量百分比
@@ -382,11 +419,13 @@ function ObjectStatusIsDamaged(current)
 end
 
 -- This function check if the object is really damaged(health bar is red)
+---@param current StandardUnitType
 function ObjectStatusIsReallyDamaged_Slow(current)
   return EvaluateCondition("UNIT_HAS_OBJECT_STATUS", current, "REALLYDAMAGED")
 end
 
 --100-66绿血， 65-33黄血， 32-0红血
+---@param current StandardUnitType
 function ObjectStatusIsReallyDamaged(current)
   local health = ObjectGetCurrentHealth(current) -- 当前血量
   local initialHealth = ObjectGetInitialHealth(current) -- 初始血量
@@ -394,13 +433,60 @@ function ObjectStatusIsReallyDamaged(current)
   return healthPercentage <= 0.32
 end
 
--- This function check if the object is using the hold position stance
+--- Checks if the object is of a specific unit type.
+--- @param object StandardUnitType The object to check.
+--- @param single_unit_filter ObjectFilter The filter to match the unit type.
+--- @return boolean True if the object is of the specified unit type, false otherwise.
+function ObjectIsUnitOfType(object, single_unit_filter)
+  return ObjectTestTargetObjectWithFilter(nil, object, single_unit_filter)
+end
+
+function ObjectStanceIsAggressive_Slow(current)
+  return EvaluateCondition("UNIT_USING_STANCE", current, "AGGRESSIVE")
+end
+
+-- This function check if the object is in GUARD stance
+--- @param current StandardUnitType
+--- @return boolean
+function ObjectStanceIsGuard_Slow(current)
+  return EvaluateCondition("UNIT_USING_STANCE", current, "GUARD")
+end
+-- This function check if the object is in HOLD POSITION stance
+--- @param current StandardUnitType
+--- @return boolean
 function ObjectStanceIsHoldPosition_Slow(current)
   return EvaluateCondition("UNIT_USING_STANCE", current, "HOLD_POSITION")
 end
 
+-- This function check if the object is in HOLD FIRE stance
+--- @param current StandardUnitType
+--- @return boolean
 function ObjectStanceIsHoldFire_Slow(current)
   return EvaluateCondition("UNIT_USING_STANCE", current, "HOLD_FIRE")
+end
+
+-- This function set Object Status of the object
+--- @param current StandardUnitType
+--- @param status string
+--- @param bool boolean
+function ObjectSetObjectStatus_Slow(current, status, bool)
+  ExecuteAction("UNIT_CHANGE_OBJECT_STATUS", current, status, bool)
+end
+
+--- Deprecated, since it requires at least 1 frame between the two STATUS change to work
+--- Hence to deselect a unit, a outside timer is needed.
+--- Therefore it's impossible to use this function to deselect a unit in a single frame
+--  This function deselect the unit from player's selection
+--- function UnitDeselect_Slow(current)
+--   ObjectSetObjectStatus_Slow(current, "UNSELECTABLE", true)
+--   ObjectSetObjectStatus_Slow(current, "UNSELECTABLE", false)
+-- end
+
+-- This function set the Object Status of the object to UNSELECTABLE
+---@param current StandardUnitType
+---@param bool boolean
+function ObjectSetObjectStatusUnselectable_Slow(current, bool)
+  ObjectSetObjectStatus_Slow(current, "UNSELECTABLE", bool)
 end
 
 
@@ -435,6 +521,9 @@ end
 
 -- Most object in game can have InfoBox, including map objects, trees, buildings, units, etc
 -- Named waypoint cannot have InfoBox
+--- @param current StandardUnitType
+--- @param text_reference_name string
+--- @param time number
 function UnitShowInfoBox(current, text_reference_name, time)
   if time == nil then
     time = 5
@@ -465,6 +554,15 @@ end
 
 function UnitUseAbility(current, ability_name)
   ExecuteAction("NAMED_USE_COMMANDBUTTON_ABILITY", current, ability_name)
+end
+
+function UnitUseAbilityOnTarget(current, ability_name, target)
+  -- Command_AlliedFutureTankLaserWeapon
+  --local object_reference = ObjectGetId(current)
+  local target_reference = ObjectGetId(target)
+  ExecuteAction("SET_UNIT_REFERENCE", target_reference, target)
+  
+  ExecuteAction("NAMED_USE_COMMANDBUTTON_ABILITY_ON_NAMED", current, ability_name, target_reference)
 end
 
 
@@ -521,37 +619,21 @@ end
 -- When a unit is dead, it's expected to be set to nil in the table.
 -- For example table[player_index][unit_index] = nil means the unit is marked as dead but not removed from the table
 -- Time complexity: O(n) where n is the size of the table
+---@param table UnitCollection
+---@param player_index integer
+---@return nil
 function _Rebuild_Table_with_Nils_Removed(table, player_index)
--- Example Table Design:
--- Athena_table = {
---   [1] = {size = 0},  -- Player 1
---   [2] = {size = 0},  -- Player 2
---   [3] = {size = 0},  -- Player 3
---   [4] = {size = 0},  -- Player 4
---   [5] = {size = 0},  -- Player 5
---   [6] = {size = 0},  -- Player 6
---   filter_friendly = CreateObjectFilter({
---     Rule="ANY",
---     Relationship = "ALLIES",
---     IncludeThing={
---       "AlliedAntiStructureVehicle",
---     },
---   }),
---   filter_neutral = CreateObjectFilter({
---     IncludeThing={
---       "AlliedAntiStructureVehicle",
---     },
---   }),
--- }
-  local new_table = {}
-  local new_time_table = nil
+  --- @type PlayerUnitTable
+  local new_table = {
+    size = 0,
+    time = {},
+    unit_id = {},
+    evac_dict = {},
+    cooldown_dict = {}
+  }
   if table[player_index] == nil then
     _ALERT("_Rebuild_Table_with_Nils_Removed: table[player_index] is nil. player_index = "..tostring(player_index))
     return
-  end
-  -- Check if the 'time' table exists for this type of Unit 
-  if table[player_index].time then
-    new_time_table = {}
   end
 
   local new_size = 0
@@ -561,74 +643,23 @@ function _Rebuild_Table_with_Nils_Removed(table, player_index)
     if current then
       new_size = new_size + 1
       new_table[new_size] = current
-      if new_time_table then
-        new_time_table[new_size] = table[player_index].time[i]
+      new_table.time[new_size] = table[player_index].time[i]
+      ---@type UnitID|nil
+      local unit_id = table[player_index].unit_id[i]
+      new_table.unit_id[new_size] = unit_id
+      if unit_id then
+        local evac = table[player_index].evac_dict[unit_id]
+        if evac then
+          new_table.evac_dict[unit_id] = evac
+        end
+        local cooldown = table[player_index].cooldown_dict[unit_id]
+        if cooldown then
+          new_table.cooldown_dict[unit_id] = cooldown
+        end
       end
     end
   end
   table[player_index] = new_table
-  if new_time_table then
-    table[player_index].time = new_time_table
-  end
   table[player_index].size = new_size
-end
-
-function _Rebuild_Dict_in_Table_with_Nils_Removed(table, player_count)
-  local new_dict = {}
-  local new_size = 0
-  if not player_count then
-    player_count = 6
-  end
-  if table.dict_is_in_group then
-    for i = 1, player_count, 1 do
-      local size = table[i].size
-      if size == nil then
-        _ALERT("_Rebuild_Dict_in_Table_with_Nils_Removed: player "..tostring(i).." table size is nil")
-        return
-      end
-      for j = 1, size, 1 do
-        local current = table[i][j]
-        if current then
-          local unit_id = ObjectGetId(current)
-          new_dict[unit_id] = table.dict_is_in_group[unit_id]
-        end
-      end
-    end
-    table.dict_is_in_group = new_dict
-  end
-end
-
-
-function _Calculate_FCS_Group_center(fcs_group, fcs_group_size)
-  local x = 0
-  local y = 0
-  local z = 0
-  for i = 1, fcs_group_size, 1 do
-    local cx, cy, cz = ObjectGetPosition(fcs_group[i])
-    x = x + cx
-    y = y + cy
-    z = z + cz
-  end
-  x = x / fcs_group_size
-  y = y / fcs_group_size
-  z = z / fcs_group_size
-  return x, y, z
-end
-
-
--- This function calculate the radius of the group
--- Time complexity: O(n) where n is fcs_group_size
-function _Calculate_FCS_Group_radius(fcs_group, fcs_group_size)
-  local cx, cy, cz = _Calculate_FCS_Group_center(fcs_group, fcs_group_size)
-  local group_radius = 0
-  for i = 1, fcs_group_size, 1 do
-    local unit = fcs_group[i]
-    local x, y, z = ObjectGetPosition(unit)
-    local distance_to_center_2D = sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy))
-    if distance_to_center_2D > group_radius then
-      group_radius = distance_to_center_2D
-    end
-  end
-  return group_radius
 end
 
