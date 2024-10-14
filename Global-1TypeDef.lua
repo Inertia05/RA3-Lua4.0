@@ -1,3 +1,5 @@
+
+--- @meta
 --- This file is for type definition only, it is not executable code.
 --- It is used to define the types of the functions and variables used in the code.
 
@@ -17,10 +19,36 @@
 --- This is the actual value stored in the StandardUnitType table.
 --- Value can be retrived by ObjectGetId(unit) function.
 
+--- @class FilterParams
+--- @field Relationship string|nil Optional. Defines relationships like "ENEMIES", "NEUTRAL", or "ALLIES".
+--- @field IncludeThing (string|number)[] Optional. Array of things to include, which could be names or hashed values.
+--- @field ExcludeThing (string|number)[]|nil Optional. Array of things to exclude, must be used with IncludeThing.
+--- @field Exclude string|nil Optional. UNTESTED. Defines the kinds of objects to exclude.
+--- @field Rule "ANY"|"ALL"|nil Optional. The filter rule, either "ANY" or "ALL".
+--- @field Include string|nil Optional. Defines the kinds of objects to include, such as "SMALL_MISSILE", "AIRCRAFT", "SHIP", etc.
+--- @field StatusBitFlags string|nil Optional. Defines the status flags to include, such as "IGNORING_POWER_DOWN", "SHRUNK".
+--- @field StatusBitFlagsExclude string|nil Optional. Defines the status flags to exclude, such as "IGNORING_POWER_DOWN", "SHRUNK".
+
+
+
 --- @class ObjectFilter
 -- This represents a filter object, which is used to filter specific units or objects based on some criteria.
 -- The details of how the filter works are hidden away.
+-- This filter is returned by the CreateObjectFilter function using the FilterParams table.
 
+--- A type representing 3D coordinates.
+--- @class Position
+--- @field x number The x-coordinate.
+--- @field y number The y-coordinate.
+--- @field z number The z-coordinate.
+
+
+--- @class AreaParams
+--- @field X number The X coordinate.
+--- @field Y number The Y coordinate.
+--- @field Z number The Z coordinate.
+--- @field Radius number The radius of the area.
+--- @field DistType "CENTER_2D" The type of distance calculation (e.g., "CENTER_2D").
 
 --- @class PlayerUnitTable
 --- @field size integer The number of units for the player
@@ -100,9 +128,32 @@
 ---@field artillery_allocated_dict table<UnitID, boolean> Dictionary to store artillery that has been assigned to a target
 ---@field artillery_stance_dict table<UnitID, Stance> Dictionary to store the stance of the artillery
 ---@field canAllocateTarget fun(self: FCS, target: any): boolean Function to check if the target can be allocated
----@field canAllocateArtillery fun(self: FCS, artillery: StandardUnitType, current_target: StandardUnitType|nil, player_index: integer): boolean Function to check status of artillery to determine if it can be allocated
----@field allocateArtilleryToTarget fun(self: FCS, artillery: StandardUnitType, target: StandardUnitType, player_index: integer) Function to allocate artillery to a target
+---@field canAllocateArtillery fun(self: FCS, artillery: StandardUnitType, current_target: StandardUnitType|nil): boolean Function to check status of artillery to determine if it can be allocated
+---@field allocateArtilleryToTarget fun(self: FCS, artillery: StandardUnitType, target: StandardUnitType) Function to allocate artillery to a target
 ---@field isTargetAllocated fun(self: FCS, target: any): boolean Function to check if the target is already allocated
 ---@field isArtilleryAllocated fun(self: FCS, artillery: StandardUnitType): boolean Function to check if the artillery is already allocated
 ---@field _getArtilleryStance fun(self: FCS, artillery: StandardUnitType): Stance Function to get the stance of the artillery and update it if it is not in the dictionary
 ---@field _orderAttack fun(self: FCS, artillery: StandardUnitType, target: StandardUnitType) Function to order the artillery to attack the target
+
+
+
+--- FCS_Running_Data class definition
+---@class FCS_Running_Data
+---@field _global_timer number The global timer for all systems, counts down from 60 to 0
+---@field _GLOBAL_TIMER_MAX number The maximum value for the global timer before it resets
+---@field _TARGET_ALLOCATION_RESET_INTERVAL table<FCSName, number> Constant values for target allocation reset intervals (in seconds)
+---@field _ARTILLERY_STANCE_RESET_INTERVAL table<FCSName, number> Constant values for artillery stance reset intervals (in seconds)
+---@field AOLSCS FCS The FCS object for AOLSCS
+---@field CSFAS FCS The FCS object for CSFAS
+---@field ATFACS FCS The FCS object for ATFACS
+---@field updateTimers fun(self: FCS_Running_Data) Function to update the global timer
+---@field getGlobalTimer fun(self: FCS_Running_Data): number Function to retrieve the current value of the global timer
+---@field isTimeToResetArtilleryStanceInfo fun(self: FCS_Running_Data, fcs: FCSName): boolean Function to check if it's time to reset artillery stance info
+---@field resetArtilleryStanceInfo fun(self: FCS_Running_Data, fcs_name: FCSName) Function to reset artillery stance info
+---@field isTimeToResetTargetAllocation fun(self: FCS_Running_Data, fcs: FCSName): boolean Function to check if it's time to reset target allocation
+---@field resetTargetAllocation fun(self: FCS_Running_Data, fcs: FCSName) Function to reset target allocation
+---@field _findAndGroupNearbyUnits fun(self: FCS_Running_Data, current: StandardUnitType, grouping_range_threshold: number, artillery_grouped: table<string, boolean>, player_index: integer, fcs: FCSName, artillery_table: UnitCollection): StandardUnitType[], integer Function to find and group nearby units
+---@field _allocateTargetsToGroup fun(self: FCS_Running_Data, fcs_group: StandardUnitType[], fcs_group_size: integer, artillery_range: integer, current: StandardUnitType, player_index: integer, fcs: FCSName) Function to allocate targets to a group of artillery units
+---@field groupArtilleryAndAllocateTargets fun(self: FCS_Running_Data, player_index: integer, fcs: FCSName) Function to group and allocate targets for the artillery
+---@field _calculate_FCS_Group_center fun(self: FCS_Running_Data, fcs_group: StandardUnitType[], fcs_group_size: integer): number, number, number Function to calculate the center of the artillery group
+---@field _calculate_FCS_Group_radius function fun(self: FCS_Running_Data, fcs_group: StandardUnitType[], fcs_group_size: integer): number Function to calculate the radius of the artillery group

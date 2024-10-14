@@ -1,3 +1,4 @@
+--- @module "Global-1TypeDef"
 local new = require("table.new")
 -- **********************************Important**********************************
 -- This function override the LUA interal error handling function and redirect the error message to the debug console
@@ -236,10 +237,17 @@ function Area_enemy_search(x,y,z, radius, ref_object)
   return matchedObjects, count
 end
 
-
-function Area_enemy_search_surface_only(x,y,z, radius, ref_object)
-  local matchedObjects, count = ObjectFindObjects(ref_object, 
-  {X=x, Y=y, Z=z, Radius=radius, DistType="CENTER_2D"}, 
+-- This function find all enemy surface selectable units and buildings in an area.
+---@param x number 
+---@param y number 
+---@param z number 
+---@param radius number The radius of the area, centered at (x,y,z)
+---@param iff_ref_object StandardUnitType The reference object for Identifying Friend or Foe (IFF)
+---@return StandardUnitType[]
+---@return number
+function Area_enemy_search_surface_only(x,y,z, radius, iff_ref_object)
+  local matchedObjects, count = ObjectFindObjects(iff_ref_object,
+  {X = x, Y = y, Z = z, Radius = radius, DistType = "CENTER_2D"},
   FilterEnemySelectableSurfaceOnly)
   return matchedObjects, count
 end
@@ -632,7 +640,7 @@ function _Rebuild_Table_with_Nils_Removed(table, player_index)
     cooldown_dict = {}
   }
   if table[player_index] == nil then
-    _ALERT("_Rebuild_Table_with_Nils_Removed: table[player_index] is nil. player_index = "..tostring(player_index))
+    _ALERT("_Rebuild_Table_with_Nils_Removed: UnitCollection is nil. player_index = "..tostring(player_index))
     return
   end
 

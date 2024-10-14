@@ -1,3 +1,4 @@
+--- @module "Global0VarFun"
 --- Conditional Evacuation and Deselection System (CEDS)
 --- Two components: Conditional Evacuation System (CES) and Conditional Deselection System (CDS) 
 

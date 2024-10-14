@@ -1,4 +1,4 @@
-
+--- @module "Global0VarFun" 
 -- AOLSCS-ACTIVE
 -- "盟军轨道激光打击协调系统(AOLSCS)运行中"
 -- END
@@ -10,22 +10,19 @@
 
 
 --- FCS_Running_Data manages the timing and target allocation for different FCS systems.
----@class FCS_Running_Data
+---@type FCS_Running_Data
 FCS_Running_Data = {
     --- Global timer for all systems, count down from 60 to 0
-    ---@type number
     _global_timer = 0,
 
     --- The maximum value for the global timer before it resets
-    ---@type number
     _GLOBAL_TIMER_MAX = 60,
 
     --- Constant values for target allocation reset intervals (in seconds)
-    ---@type table<FCSName, number>
     _TARGET_ALLOCATION_RESET_INTERVAL = {AOLSCS = 10, STBMFAS = 10, CSFAS = 10, ATFACS = 15},
 
     --- Constant values for artillery stance info reset intervals (in seconds)
-    --- @type table<FCSName, number>
+
     _ARTILLERY_STANCE_RESET_INTERVAL = {AOLSCS = 15, STBMFAS = 15, CSFAS = 30, ATFACS = 30},
 
 
@@ -40,7 +37,6 @@ FCS_Running_Data = {
 
 
     --- Updates the global timer, resetting it if it reaches 0
-    ---@param self FCS_Running_Data
     updateTimers = function(self)
         if self._global_timer <= 0 then
             self._global_timer = self._GLOBAL_TIMER_MAX
@@ -50,16 +46,11 @@ FCS_Running_Data = {
     end,
 
     --- Retrieves the current value of the global timer
-    ---@param self FCS_Running_Data
-    ---@return number The current global timer value
     getGlobalTimer = function(self)
         return self._global_timer
     end,
 
     --- Checks if it's time to reset artillery stance info for the given FCS
-    --- @param self FCS_Running_Data
-    --- @param fcs FCSName The FCS system to check (e.g., "AOLSCS", "STBMFAS")
-    --- @return boolean True if it's time to reset artillery stance info, false otherwise
     isTimeToResetArtilleryStanceInfo = function(self, fcs)
         local interval = self._ARTILLERY_STANCE_RESET_INTERVAL[fcs]
 
@@ -78,8 +69,6 @@ FCS_Running_Data = {
     end,
 
     --- Resets the artillery stance info for a given FCS system
-    --- @param self FCS_Running_Data
-    --- @param fcs_name FCSName The FCS system to reset (e.g., "AOLSCS", "STBMFAS")
     resetArtilleryStanceInfo = function(self, fcs_name)
         --- @type FCS
         local fcs = self[fcs_name]
@@ -91,9 +80,6 @@ FCS_Running_Data = {
     end,
 
     --- Checks if it's time to reset the target allocation for the given FCS
-    ---@param self FCS_Running_Data
-    ---@param fcs FCSName The FCS system to check (e.g., "AOLSCS", "STBMFAS")
-    ---@return boolean True if it's time to reset target allocation, false otherwise
     isTimeToResetTargetAllocation = function(self, fcs)
         local interval = self._TARGET_ALLOCATION_RESET_INTERVAL[fcs]
 
@@ -113,8 +99,6 @@ FCS_Running_Data = {
     end,
 
     --- Resets the target allocation for a given FCS system
-    ---@param self FCS_Running_Data
-    ---@param fcs FCSName The FCS system to reset (e.g., "AOLSCS", "STBMFAS")
     resetTargetAllocation = function(self, fcs)
         if self[fcs] then
             self[fcs].target_allocated_dict = {}
@@ -134,7 +118,8 @@ FCS_Running_Data = {
     --- @param artillery_table UnitCollection the table of artillery
     --- @return StandardUnitType[] the array of grouped units
     --- @return integer the size of the array
-    _findAndGroupNearbyUnits = function (self, current, grouping_range_threshold, artillery_grouped, player_index, fcs, artillery_table)
+    _findAndGroupNearbyUnits = function (self, current, grouping_range_threshold,
+        artillery_grouped, player_index, fcs, artillery_table)
         local radius = grouping_range_threshold
         local matchedObjects, count = Area_Friendly_Unit_filter_search(current, radius, artillery_table.filter_friendly)
         local fcs_group = {}
@@ -151,7 +136,7 @@ FCS_Running_Data = {
                         artillery_grouped[current_artillery_id] = true
                         -- Only add artillery that can be allocated and are in hold position to the group
                         local current_target = ObjectFindTarget(current_artillery)
-                        if fcs_data:canAllocateArtillery(current_artillery, current_target, player_index) then
+                        if fcs_data:canAllocateArtillery(current_artillery, current_target) then
                             fcs_group_size = fcs_group_size + 1
                             fcs_group[fcs_group_size] = current_artillery
                             if (FCS_Active_Display:isDisplayAllowed(player_index, fcs)) then
@@ -177,7 +162,8 @@ FCS_Running_Data = {
     --- @param current StandardUnitType
     --- @param player_index integer
     --- @param fcs FCSName
-    _allocateTargetsToGroup  = function (self, fcs_group, fcs_group_size, artillery_range, current, player_index, fcs)
+    _allocateTargetsToGroup  = function (self, fcs_group, 
+        fcs_group_size, artillery_range, current, player_index, fcs)
         local group_radius = FCS_Running_Data:_calculate_FCS_Group_radius(fcs_group, fcs_group_size)
         local guaranteed_radius = artillery_range - group_radius
         local max_radius = artillery_range + group_radius
@@ -197,7 +183,7 @@ FCS_Running_Data = {
             for target_index = 1, target_count, 1 do
                 local target = matchedTargets[target_index]
                 if fcs_data:canAllocateTarget(target) then
-                    fcs_data:allocateArtilleryToTarget(artillery, target, player_index)
+                    fcs_data:allocateArtilleryToTarget(artillery, target)
                     target_marked_count = target_marked_count + 1
                     break
                 end
@@ -216,7 +202,7 @@ FCS_Running_Data = {
                 for target_index = 1, target_count, 1 do
                     local target = matchedTargets[target_index]
                     if fcs_data:canAllocateTarget(target) then
-                        fcs_data:allocateArtilleryToTarget(artillery, target, player_index)
+                        fcs_data:allocateArtilleryToTarget(artillery, target)
                         break
                     end
                 end
@@ -225,9 +211,6 @@ FCS_Running_Data = {
     end,
 
     --- Group and allocate targets for the artillery
-    --- @param self FCS_Running_Data
-    --- @param player_index integer
-    --- @param fcs FCSName
     groupArtilleryAndAllocateTargets = function (self, player_index, fcs)
         local rebuild_table = false
         local artillery_grouped = {}
@@ -262,7 +245,7 @@ FCS_Running_Data = {
                     else
                         -- process the individual unit(size 1 group)
                         local current_target = ObjectFindTarget(current)
-                        if fcs_data:canAllocateArtillery(current, current_target, player_index) then
+                        if fcs_data:canAllocateArtillery(current, current_target) then
                             local x, y, z = ObjectGetPosition(current)
                             local matchedTargets, target_count = Area_enemy_search_surface_only(x, y, z, artillery_range, current)
                             if FCS_Active_Display:isDisplayAllowed(player_index, fcs) then
@@ -271,7 +254,7 @@ FCS_Running_Data = {
                             for target_index = 1, target_count, 1 do
                                 local target = matchedTargets[target_index]
                                 if fcs_data:canAllocateTarget(target) then
-                                    fcs_data:allocateArtilleryToTarget(current, target, player_index)
+                                    fcs_data:allocateArtilleryToTarget(current, target)
                                     break
                                 end
                             end
@@ -292,9 +275,6 @@ FCS_Running_Data = {
 
     --- Calculate the center of the group
     --- Time complexity: O(n) where n is fcs_group_size
-    --- @param fcs_group table<number, StandardUnitType> The group of units
-    --- @param fcs_group_size number The size of the group
-    --- @return number, number, number The x, y, z coordinates of the group center
     _calculate_FCS_Group_center = function(self, fcs_group, fcs_group_size)
         local x = 0
         local y = 0
