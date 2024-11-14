@@ -14,7 +14,9 @@ Notably, music from the *Corona* mod gained widespread attention when it was fea
 
 MOD official download site: https://cor-games.com/resource
 
+MOD official promotion account: https://space.bilibili.com/400315239?
 
+MOD promotion account(international): https://www.youtube.com/@ra3coronadevelopers863
 ---
 
 Currently, the code includes a fire control system for various long range artillery units and an automatic evacuation system for various aircraft units. As development continues, more features and content may be added in future updates.
@@ -22,6 +24,6 @@ Currently, the code includes a fire control system for various long range artill
 The FCS currently have 3 compontents: target prioritization, fire deconfliction, and target reallocation.  
  
   
-  
+
 ---
 
