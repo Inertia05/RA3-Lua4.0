@@ -56,6 +56,14 @@ function ObjectGetIntPosition(object)
   return tolerant_floor(x), tolerant_floor(y), tolerant_floor(z)
 end
 
+function ObjectGetCurrentIntHealth(object)
+  return tolerant_floor(ObjectGetCurrentHealth(object))
+end
+
+function ObjectGetInitialIntHealth(object)
+  return tolerant_floor(ObjectGetInitialHealth(object))
+end
+
 
 
 
@@ -220,37 +228,18 @@ Athena_laser_table = {
 }
 
 
-
-Celestial_satellite_cannon_table = {
-  cannons = {},
-  targets = {},
-  size = 0
-}
 --  AIRCRAFT INFANTRY SHIP SUBMARINE VEHICLE"
-FilterSelectable = {
+FilterSelectable = CreateObjectFilter({
   Rule="ANY",
-  Include="SELECTABLE"
-}
+  Include="SELECTABLE",
+  IncludeThing={}
+})
 
-FilterAircraft = {
+FilterStructure = CreateObjectFilter({
   Rule="ANY",
-  Include="AIRCRAFT"
-}
-
-FilterVehicle = {
-  Rule="ANY",
-  Include="VEHICLE"
-}
-
-FilterNavy = {
-  Rule="ANY",
-  Include="SHIP SUBMARINE"
-}
-
-FilterStructure = {
-  Rule="ANY",
-  Include="STRUCTURE"
-}
+  Include="STRUCTURE",
+  IncludeThing={}
+})
 
 FilterEnemySelectable = CreateObjectFilter({
     Rule="ANY",
@@ -546,16 +535,6 @@ function IsNewObject(existingObjects, newObject, size)
 end
 
 
--- This function remove the object at the given index from the Celestial_satellite_cannon_table
--- and updated the table size
-function Remove_Celesital_satellite_cannon_from_table(index)
-  for i = index, Celestial_satellite_cannon_table.size-1, 1 do
-    Celestial_satellite_cannon_table.cannons[i] = Celestial_satellite_cannon_table.cannons[i+1]
-    Celestial_satellite_cannon_table.targets[i] = Celestial_satellite_cannon_table.targets[i+1]
-  end
-  Celestial_satellite_cannon_table.size = Celestial_satellite_cannon_table.size - 1
-end
-
 -- ***********************************************************************************
 -- *************注意EvaluateCondition 和ExecuteAction的计算成本是LUA的100倍*************
 -- *******************************尽量减少这两个函数的调用次数**************************
@@ -589,8 +568,8 @@ end
 -- This function check if the object is damaged(health bar is not full)
 ---@param current StandardUnitType
 function ObjectIsDamaged(current)
-  local health = tolerant_floor(ObjectGetCurrentHealth(current)) -- 当前血量
-  local initialHealth = tolerant_floor(ObjectGetInitialHealth(current)) -- 初始血量
+  local health = ObjectGetCurrentIntHealth(current) -- 当前血量
+  local initialHealth = ObjectGetInitialIntHealth(current) -- 初始血量
   return health < initialHealth
 end
 
@@ -603,9 +582,6 @@ end
 --100-66绿血， 65-33黄血， 32-0红血
 ---@param current StandardUnitType
 function ObjectStatusIsLightlyDamaged(current)
-  -- local health = ObjectGetCurrentHealth(current) -- 当前血量
-  -- local initialHealth = ObjectGetInitialHealth(current) -- 初始血量
-  -- local healthPercentage = health / initialHealth -- 血量百分比 
   return ObjectStatusIs(current, "DAMAGED")
 end
 
@@ -618,9 +594,6 @@ end
 --100-66绿血， 65-33黄血， 32-0红血
 ---@param current StandardUnitType
 function ObjectStatusIsReallyDamaged(current)
-  -- local health = ObjectGetCurrentHealth(current) -- 当前血量
-  -- local initialHealth = ObjectGetInitialHealth(current) -- 初始血量
-  -- local healthPercentage = health / initialHealth -- 血量百分比
   return ObjectStatusIs(current, "REALLYDAMAGED")
 end
 
@@ -632,11 +605,24 @@ function ObjectIsUnitOfType(object, single_unit_filter)
   return ObjectTestTargetObjectWithFilter(nil, object, single_unit_filter)
 end
 
+--- Checks if the object is kindOf
+---@param object StandardUnitType The object to check.
+---@param kindOf KindOf
+---@return boolean
+function ObjectIsKindOf(object, kindOf)
+  local filter = FilterKindOf[kindOf]
+  if filter == nil then
+    _ALERT("ObjectIsKindOf: the kindOf is not defined in FilterKindOf")
+    return false
+  end
+  return ObjectTestTargetObjectWithFilter(nil, object, filter)
+end
+
 --- Checks if the object is structure
 --- @param object StandardUnitType The object to check.
---- @return boolean True if the object is of the specified unit type, false otherwise.
+--- @return boolean True if the object is structure, false otherwise.
 function ObjectIsStructure(object)
-  return ObjectTestTargetObjectWithFilter(nil, object, FilterStructure)
+  return ObjectIsKindOf(object, "STRUCTURE")
 end
 
 function ObjectStanceIsAggressive_Slow(current)
@@ -669,6 +655,10 @@ end
 --- @param bool boolean
 function ObjectSetObjectStatus_Slow(current, status, bool)
   ExecuteAction("UNIT_CHANGE_OBJECT_STATUS", current, status, bool)
+end
+--- @param current StandardUnitType
+function ObjectDelete_Slow(current)
+  ExecuteAction("NAMED_DELETE", current)
 end
 
 --- Deprecated, since it requires at least 1 frame between the two STATUS change to work
@@ -708,12 +698,9 @@ function UnitForceAttackTarget(current, target)
   ExecuteAction("NAMED_FORCE_ATTACK_NAMED", current, target)
 end
 
---- This function check if a unit is sighted by the first human player and his allies
---- @param current StandardUnitType
---- @return boolean
-function UnitSightedbyHumanPlayer_PVE_Slow(current)
-  return EvaluateCondition("NAMED_DISCOVERED", "<1st Human Player's Allies incl Self>", current)
-end
+
+
+
 
 function UnitStop(current)
   ExecuteAction("NAMED_STOP", current)
@@ -871,3 +858,5 @@ function _Rebuild_Table_with_Nils_Removed(table, player_index)
 end
 
 -- exMessageAppendToMessageArea("Global0VarFun.lua loading completed")
+
+

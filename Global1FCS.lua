@@ -284,14 +284,19 @@ FCS_Running_Data = {
         local guaranteedTargetsCount = 0
         if fcs_data.isPrecisionStrike then
             --- prioritize static structures over surface units 
-            target_lists.size = 2
+            target_lists.size = 3
             local matchedStructureTargets, structureTargetCount = Area_enemy_structure_search(cx, cy, cz, guaranteed_radius, current)
             target_lists[1] = matchedStructureTargets
             target_lists.target_list_sizes[1] = structureTargetCount
             
             local matchedSurfaceUnitTargets, surfaceUnitTargetCount = Area_enemy_surface_unit_search(cx, cy, cz, guaranteed_radius, current)
-            target_lists[2] = matchedSurfaceUnitTargets
-            target_lists.target_list_sizes[2] = surfaceUnitTargetCount
+            local true_arr, true_count, false_arr, false_count = SplitArray(matchedSurfaceUnitTargets, surfaceUnitTargetCount, 
+            fcs_data.isHighValueTarget)
+            target_lists[2] = true_arr
+            target_lists.target_list_sizes[2] = true_count
+
+            target_lists[3] = false_arr
+            target_lists.target_list_sizes[3] = false_count
 
             guaranteedTargetsCount = structureTargetCount + surfaceUnitTargetCount
         else
@@ -343,8 +348,8 @@ FCS_Running_Data = {
                     local target = current_target_list[target_index]
                     if fcs_data:canAllocateTarget(target) then
                         if fcs_data.isPrecisionStrike and (not ObjectIsStructure(target)) and
-                            tolerant_floor(ObjectGetCurrentHealth(target)) < fcs_data.precision_strike_hp_threshold then
-                            -- skip low health targets for precision strike in first pass
+                            fcs_data:isLowValueTarget(target) then
+                            -- skip low value targets for precision strike in guaranteed_radius target allocation
                         else
                             for artillery_index = artillery_allocated_count + 1, fcs_group_size, 1 do
                                 local artillery = fcs_group[artillery_index]
@@ -395,7 +400,7 @@ FCS_Running_Data = {
         ---     O(p * (n+log(N))
         --- if we instead allocate targets by group, 
         ---     O(p * k)
-        --- if k is much smaller than n, then the second approach is more efficient
+        --- if k is much smaller than n(ex: target rich environment), then the second approach is more efficient
         if artillery_allocated_count < fcs_group_size then
             local all_potential_targets = target_lists.all_potential_targets
             local all_potential_targets_size = target_lists.all_potential_targets_size

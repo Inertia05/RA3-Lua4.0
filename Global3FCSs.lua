@@ -43,7 +43,30 @@ local createFCS = function(name, artillery_range, artillery_grouping_range_thres
 
         name = name or "Unnamed FCS",
         isPrecisionStrike = true,
-        precision_strike_hp_threshold  = 250, --- target with hp lower than this will be skipped in first pass of target allocation
+        hp_threshold_LVT  = 250, --- target with hp lower than this will be skipped in guaranteed radius target allocation
+        --- ex: all infantry units except commando infantry have less than 250 hp
+        isHighValueTarget = function(self, target) --- used for precision strike FCS
+            if ObjectIsKindOf(target, "SIEGE_WEAPON") then
+                return true
+            end
+            return false
+        end,
+
+        isLowValueTarget = function(self, target) --- these are targets that will be considered last in precision strike FCS
+            if self:isHighValueTarget(target) then
+                return false
+            end
+            if ObjectGetCurrentIntHealth(target) < self.hp_threshold_LVT then
+                return true
+            end
+            return false
+        end,
+        ---- Example priority order for target allocation
+        ---- 1. Structure(in guaranteed radius), highest priority
+        ---- 2. High value target(in guaranteed radius), ex: siege weapon
+        ---- 3. Other non low value target(in guaranteed radius)
+        ---- 4. Remaining targets(in full radius, not guaranteed), ), ex: low value target
+        
         artillery_table = artillery_table,
         artillery_range = artillery_range,
         artillery_grouping_range_threshold = artillery_grouping_range_threshold,
@@ -55,6 +78,8 @@ local createFCS = function(name, artillery_range, artillery_grouping_range_thres
         artillery_to_target_dict = {},
 
         artillery_stance_dict = {},
+
+
 
 
         --- Checks if the target can be allocated (detected and not already allocated)
@@ -223,14 +248,26 @@ local createFCS = function(name, artillery_range, artillery_grouping_range_thres
         _orderAttack = function(self, artillery, target)
             UnitAttackTarget(artillery, target)
         end,
+
     }
     return fcs
 end
 
 Athena_table = CreateUnitTable({"AlliedAntiStructureVehicle"})
 
+
 local AOLSCS = createFCS("Allied Orbital Laser Strike Coordination System (AOLSCS)", 
-1000,200, Athena_table)
+1050,200, Athena_table)
+AOLSCS.canAllocateTarget = function(self, target)
+    -- if (not FCS_Running_Data:isTargetVisiblePVE(target)) then --- TODO, 视野函数还是有BUG
+    --     return false
+    -- end
+    if (not self:isTargetAllocated(target)) then
+        return true
+    else
+        return self.target_allocated_dict[ObjectGetId(target)] < 2
+    end
+end
 FCS_Running_Data.AOLSCS = AOLSCS
 
 Celestial_Artillery_table = CreateUnitTable({"CelestialAntiStructureVehicle"})
@@ -260,7 +297,7 @@ local CSFAS = createFCS("Celestial Suborbital Fire Allocation System (CSFAS)",
 1050,200, Celestial_Advanced_Bomber_table)
 -- 3D range = 750, buffed to 1125(750*1.5)
 -- 2D range = 700, buffed to 1050(700*1.5)
-CSFAS.precision_strike_hp_threshold = 1000
+CSFAS.hp_threshold_LVT = 1000
 CSFAS.canAllocateArtillery = function(self, artillery)
     if not ObjectStatusIs(artillery, "IMMOBILE") then
         return false
@@ -307,7 +344,7 @@ FCS_Running_Data.CSFAS = CSFAS
 
 V4_table = CreateUnitTable({"SovietAntiStructureVehicle"})
 local STBMFAS = createFCS("Soviet Tactical Ballistic Missile Fire Allocation System (STBMFAS)",
-1000,200, V4_table)
+1050,200, V4_table)
 FCS_Running_Data.STBMFAS = STBMFAS
 
 
