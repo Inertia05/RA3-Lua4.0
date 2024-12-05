@@ -29,3 +29,20 @@ The FCS currently have 3 compontents: target prioritization, fire deconfliction,
 
 ---
 
+
+Summary of Existing Systems, Fire Control Systems (/) Aircraft Auto-Evacuation Systems:
+
+**Soviets:**  
+- **Fire Control Systems:** V4 Ballistic Missile Launcher, Terror Drone – Disruption Ray ability  
+- **Aircraft Auto-Evacuation Systems:** Sukhoi Interceptor, Il Attack Aircraft  
+
+**Allies:**  
+- **Fire Control Systems:** Athena Satellite Cannon, Future Tank – Neutron Beam ability  
+- **Aircraft Auto-Evacuation Systems:** Ares Interceptor, Century Bomber, Vindicator Bomber, Harbinger Gunship  
+
+**Celestial:**  
+- **Fire Control Systems:** Yaoguang Suborbital Aircraft, White Tiger Artillery  
+- **Aircraft Auto-Evacuation Systems:** Zhongming Interceptor, Jinwu Bomber  
+
+**Empire:**  
+- **Fire Control Systems:** Waveforce Artillery, Sakura Loitering Munition – Cluster Airstrike Management

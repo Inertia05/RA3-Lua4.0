@@ -1,3 +1,4 @@
+--- Update 2024/11/27
 --- @module "Global0VarFun" 
 --- @module "Global1FCS"
 if Global0VarFun == nil then
@@ -16,30 +17,7 @@ if DEBUG_CORONA_INE then
 end
 DEBUG_ATFACS_ACTIVE = false
 DEBUG_CSFAS_ACTIVE = false
--- AOLSCS-ACTIVE
--- "盟军轨道激光打击协调系统(AOLSCS)已启动, 取消固守模式以关闭"
--- END
 
--- STBMFAS-ACTIVE
--- "苏军战术弹道导弹火力分配系统(STBMFAS)已启动, 取消固守模式以关闭"
--- END
-
--- CSFAS-ACTIVE
--- "神州亚轨道火力分配系统(CSFAS)已启动, 进入侵略或警戒模式以关闭"
--- END
-
--- ATFACS-ACTIVE
--- "盟军战术火力分配与协调系统(ATFACS)已启动, 取消固守模式以关闭"
--- END
-
--- CASCS-ACTIVE
--- "神州火炮打击协调系统(CASCS)已启动, 取消固守模式以关闭"
--- END
-
--- ECMICS-ACTIVE
--- “帝国巡航导弹集成指挥系统(ECMICS)已启动，取消固守模式以关闭”
--- END
--- Empire Cruise Missile Integrated Command System (ECMICS)
 
 --- @type FCSName[]
 local fcs_list = {}
@@ -49,6 +27,7 @@ fcs_list[3] = "CSFAS"
 fcs_list[4] = "ATFACS"
 fcs_list[5] = "CASCS"
 fcs_list[6] = "ECMICS"
+fcs_list[7] = "STEIAS"
 
 local fcs_list_size = getn(fcs_list)
 
@@ -62,25 +41,26 @@ FCS_Running_Data = {
     _GLOBAL_TIMER_MAX = 60,
 
     --- Constant values for target allocation reset intervals (in seconds)
-    _TARGET_ALLOCATION_RESET_INTERVAL = {
-        AOLSCS = 10, -- Laser attack interval is 10 seconds
-        STBMFAS = 10, 
+    --- @type table<FCSName, integer>
+    _TARGET_ALLOCATION_RESET_INTERVAL = {--- should not be higher than Single Engagement Cycle (from aim start to strike complete)
+        AOLSCS = 6, --- Laser attack Single Engagement Cycle is 6 seconds. aim = 4, laser firing = 2
+        STBMFAS = 3, --- Ballistic missile attack Single Engagement Cycle is 6 seconds, aim = 2, missile T2T = 4
         CSFAS = 10, 
-        ATFACS = 5, -- Reload is 15 seconds, but we want to search for new targets every 5 seconds
-        CASCS = 10,
-        ECMICS = 10
+        ATFACS = 3, -- Reload is 15 seconds, but we want the FCS to strike again if needed every 3 seconds
+        CASCS = 1, --- 1 second for artillery
+        ECMICS = 3, --- it's cruise missile, Engagement Cycle is basically unlimited
+        STEIAS = 3, --- it's paralyzing laser, Engagement Cycle is basically unlimited
     },
 
     --- Constant values for artillery stance info reset intervals (in seconds)
+    
     _ARTILLERY_STANCE_RESET_INTERVAL = { -- Max system activation/deactivation reaction time
     -- ex, for reset interval = 15
     -- if stance change to active at t = 14, then the system will be activated at t = 15, reaction time = 1
     -- if stance change to active at t = 1, then the system will still be activated at t = 15, reaction time = 14
         -- AOLSCS = 15, STBMFAS = 15, CSFAS = 30, ATFACS = 30
-        AOLSCS = 15, STBMFAS = 15, CSFAS = 15, ATFACS = 15, CASCS = 15, ECMICS = 15
+        AOLSCS = 10, STBMFAS = 5, CSFAS = 15, ATFACS = 15, CASCS = 15, ECMICS = 15, STEIAS = 5
     },
-
-    pve_target_visibility_dict = {},
 
     -- assigned in Global3FCSs.lua
     --- @type FCS
@@ -95,6 +75,8 @@ FCS_Running_Data = {
     CASCS = nil,
     --- @type FCS
     ECMICS = nil,
+    --- @type FCS
+    STEIAS = nil,
 
 
     --- Updates the global timer, resetting it if it reaches 0
@@ -105,48 +87,11 @@ FCS_Running_Data = {
             self._global_timer = self._global_timer - 1
         end
 
-        --- Reset visibility dictionary every second
-        -- if (self._global_timer / 5) == floor(self._global_timer / 5) then
-            self.pve_target_visibility_dict = {}
-        --end
     end,
 
     --- Retrieves the current value of the global timer
     getGlobalTimer = function(self)
         return self._global_timer
-    end,
-
-    --- Checks if it's time to reset artillery stance info for the given FCS
-    isTimeToResetArtilleryStanceInfo = function(self, fcs)
-        local interval = tolerant_floor(self._ARTILLERY_STANCE_RESET_INTERVAL[fcs])
-        local time = tolerant_floor(self._global_timer)
-        if interval == nil then
-            _ALERT("FCS_Running_Data.isTimeToResetArtilleryStanceInfo: Invalid FCS = " .. fcs ..
-                " or _ARTILLERY_STANCE_RESET_INTERVAL not defined")
-            return false
-        end
-        
-        if time < interval then
-            return false
-        end
-
-        -- Check if the global timer is divisible by the reset interval
-        if interval > 0 and mod(time, interval) == 0 then
-            return true
-        end
-
-        return false
-    end,
-
-    --- Resets the artillery stance info for a given FCS system
-    resetArtilleryStanceInfo = function(self, fcs_name)
-        --- @type FCS
-        local fcs = self[fcs_name]
-        if fcs then
-            fcs.artillery_stance_dict = {}
-        else
-            _ALERT("FCS_Running_Data.resetArtilleryStanceInfo: Invalid FCS = " .. fcs_name)
-        end
     end,
 
     --- Checks if it's time to reset the target allocation for the given FCS
@@ -165,7 +110,7 @@ FCS_Running_Data = {
         end
 
         -- Check if the global timer is divisible by the reset interval
-        if interval > 0 and mod(time, interval) == 0 then
+        if interval > 0 and tolerant_int_mod(time, interval) == 0 then
             return true
         end
         
@@ -192,17 +137,14 @@ FCS_Running_Data = {
     --- @param target StandardUnitType The target to check
     --- @return boolean True if the target is visible, false otherwise
     isTargetVisiblePVE = function(self, target)
+        
         local target_id = ObjectGetId(target)
         if target_id == nil then
-            _ALERT("FCS_Running_Data.isTargetVisible: Invalid target")
+            _ALERT("FCS_Running_Data.isTargetVisible: Target ID is nil")
             return false
         end
-        local target_visibility = self.pve_target_visibility_dict[target_id]
-        if target_visibility == nil then
-            target_visibility = UnitSightedbyHumanPlayer_PVE_Slow(target)
-            self.pve_target_visibility_dict[target_id] = target_visibility
-        end
-        return target_visibility
+        -- return true --- @TODO
+        return UnitSightedbyHumanPlayer_PVE_Slow(target)
     end,
 
     --- This function find and group nearby units
@@ -284,19 +226,27 @@ FCS_Running_Data = {
         local guaranteedTargetsCount = 0
         if fcs_data.isPrecisionStrike then
             --- prioritize static structures over surface units 
-            target_lists.size = 3
-            local matchedStructureTargets, structureTargetCount = Area_enemy_structure_search(cx, cy, cz, guaranteed_radius, current)
-            target_lists[1] = matchedStructureTargets
-            target_lists.target_list_sizes[1] = structureTargetCount
+            target_lists.size = 4
+
             
             local matchedSurfaceUnitTargets, surfaceUnitTargetCount = Area_enemy_surface_unit_search(cx, cy, cz, guaranteed_radius, current)
-            local true_arr, true_count, false_arr, false_count = SplitArray(matchedSurfaceUnitTargets, surfaceUnitTargetCount, 
-            fcs_data.isHighValueTarget)
-            target_lists[2] = true_arr
-            target_lists.target_list_sizes[2] = true_count
+            local true_arr, true_count, false_arr, false_count = SplitArray(matchedSurfaceUnitTargets, surfaceUnitTargetCount,
+            fcs_data.isHighValueTargetFn)
+            target_lists[1] = true_arr
+            target_lists.target_list_sizes[1] = true_count
 
-            target_lists[3] = false_arr
-            target_lists.target_list_sizes[3] = false_count
+            ---- High priority targets: enemy artillery. must be considered even if they are not in guaranteed_radius
+            local artilleryTargets, artilleryTargetCount = Area_Enemy_Kindof_search(cx, cy, cz, max_radius, 
+            "SIEGE_WEAPON", current)
+            target_lists[2] = artilleryTargets
+            target_lists.target_list_sizes[2] = artilleryTargetCount
+
+            local matchedStructureTargets, structureTargetCount = Area_enemy_structure_search(cx, cy, cz, guaranteed_radius, current)
+            target_lists[3] = matchedStructureTargets
+            target_lists.target_list_sizes[3] = structureTargetCount
+
+            target_lists[4] = false_arr
+            target_lists.target_list_sizes[4] = false_count
 
             guaranteedTargetsCount = structureTargetCount + surfaceUnitTargetCount
         else
@@ -341,6 +291,10 @@ FCS_Running_Data = {
         for i = 1, number_of_target_lists, 1 do
             local current_target_list = target_lists[i]
             local target_count = target_lists.target_list_sizes[i]
+            -- if target_count == nil then
+            --     _ALERT("_allocateTargetsToGroup: target_count is nil for i = "..i..", fcs = "..fcs..", player index = "..player_index)
+            --     target_count = 0
+            -- end
             local targets_allocated_count  = 0
             if target_count > 0 then 
                 -- allocate one target in guaranteed_radius to each artillery
@@ -577,12 +531,12 @@ FCS_Running_Data = {
             --     _ALERT("Target allocation reset for " .. fcs)
             -- end
         end
-        if self:isTimeToResetArtilleryStanceInfo(fcs) then
-            self:resetArtilleryStanceInfo(fcs)
-            -- if DEBUG_CORONA_INE then
-            --     _ALERT("Artillery stance info reset for " .. fcs)
-            -- end
-        end
+        -- if self:isTimeToResetArtilleryStanceInfo(fcs) then
+        --     self:resetArtilleryStanceInfo(fcs)
+        --     -- if DEBUG_CORONA_INE then
+        --     --     _ALERT("Artillery stance info reset for " .. fcs)
+        --     -- end
+        -- end
         for player_index = 1, 6, 1 do
             self:groupArtilleryAndAllocateTargets(player_index, fcs)
         end

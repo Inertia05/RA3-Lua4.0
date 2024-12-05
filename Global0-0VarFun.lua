@@ -1,3 +1,4 @@
+--- Update: 2024/11/29
 --- @module "Global-1TypeDef"
 --- @module "Global0VarFun"
 DEBUG_CORONA_INE = false
@@ -45,6 +46,16 @@ function tolerant_floor(float)
         return floor(float)
     end
 end
+
+function tolerant_int_mod(a, b)
+  a = tolerant_floor(a)
+  b = tolerant_floor(b)
+  if b == 0 then
+    error("Division by zero in mod operation")
+  end
+  return a - tolerant_floor(a / b) * b
+end
+
 
 --- This function is used to get the position of an object in integer
 ---@param object StandardUnitType
@@ -203,8 +214,6 @@ Duration3600S = 108000 -- 3600s = 60min = 108000frames
 --地编中的核弹无畏实现方式
 --在无畏的导弹上刷一个物体(527)，这个物体会跟随无畏的导弹移动。当无畏的导弹被摧毁时，在刷出的物体上刷个核弹
 
-INITIATOR_OBJECT_NEUTRAL = GetObjectByScriptName("LUA-INITIATOR")
-
 Century_bomb_filter = CreateObjectFilter({
   IncludeThing={
     "CenturyBomber_HugeBombProjectile",
@@ -215,7 +224,8 @@ Century_bomb_filter = CreateObjectFilter({
 Missile_table = {
   size = 0,
   positions = {},
-  is_dead = {}
+  is_dead = {},
+  id = {}
 }
 
 Athena_laser_table = {
@@ -273,6 +283,24 @@ FilterEnemyUnitSurfaceOnly = CreateObjectFilter({
     IncludeThing = {}
 })
 
+FilterEnemyVehicleSurfaceOnly = CreateObjectFilter({
+    Rule="ANY",
+    Relationship = "ENEMIES",
+    Exclude = "STRUCTURE AIRCRAFT INFANTRY",
+    StatusBitFlagsExclude = "AIRBORNE_TARGET SUBMERGED",
+    Include = "SELECTABLE",
+    IncludeThing = {},
+})
+
+FilterVehicleSurfaceOnly = CreateObjectFilter({
+  Rule="ANY",
+  Exclude = "STRUCTURE AIRCRAFT INFANTRY",
+  StatusBitFlagsExclude = "AIRBORNE_TARGET SUBMERGED",
+  Include = "SELECTABLE",
+  IncludeThing = {},
+})
+
+
 FilterFriendlySelectable = CreateObjectFilter({
     Rule="ANY",
     Relationship = "ALLIES",
@@ -293,6 +321,7 @@ function Remove_missile_from_table(index)
     Missile_table[i] = Missile_table[i+1]
     Missile_table.positions[i] = Missile_table.positions[i+1]
     Missile_table.is_dead[i] = Missile_table.is_dead[i+1]
+    Missile_table.id[i] = Missile_table.id[i+1]
   end
   Missile_table.size = Missile_table.size - 1
 end
@@ -436,6 +465,7 @@ end
 
 
 -- This function search for objects in the map that match the filter, and then filter the result by distance to a point
+---- Warning: Desync risk due to searching everything in the map
 function Map_filter_search_radius_limited(x,y,z, radius, filter)
   local matchedObjects, count = Map_filter_search(filter)
   local newArray = {}  -- This will store the filtered elements
@@ -463,7 +493,7 @@ function Area_filter_search(x,y,z, radius, filter)
   --ShowDebugString("count: "..count)
   
   for i = 1, count, 1 do
-      if ObjectTestTargetObjectWithFilter(INITIATOR_OBJECT_NEUTRAL, matchedObjects[i], filter) then
+      if ObjectTestTargetObjectWithFilter(nil, matchedObjects[i], filter) then
           --ShowDebugString("matchedObjects[i] found, i = "..i)
           newSize = newSize + 1
           newArray[newSize] = matchedObjects[i]

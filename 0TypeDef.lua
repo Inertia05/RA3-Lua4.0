@@ -67,6 +67,9 @@
 --- | "UNSELECTABLE" 
 --- | "WEAPON_UPGRADED_03"
 --- | "NO_AUTO_ACQUIRE"
+--- | "WEAPON_UPGRADED_01"
+--- | "WEAPON_UPGRADED_02"
+--- | "AIRBORNE_TARGET"
 
 --- @alias ModelStatus 
 --- | "ENGAGED" 
@@ -90,9 +93,83 @@
 --- | "!="
 --- | "NE" 
 
+--- @alias AlliedCombatUnitName
+--- | AlliedAirUnitName 
+--- | AlliedNavalUnitName 
+--- | AlliedGroundUnitName 
+
+--- @alias AlliedAirUnitName
+--- | "AlliedFighterAircraft"
+--- | "AlliedInterceptorAircraft"
+--- | "AlliedAntiGroundAircraft"
+--- | "AlliedSupportAircraft"
+--- | "AlliedBomberAircraft"
+--- | "AlliedGunshipAircraft"
+
+--- @alias AlliedNavalUnitName
+---| "AlliedAntiNavalScout"
+---| "AlliedAntiAirShip"
+---| "AlliedAntiInfantryVehicle"
+---| "AlliedAntiNavyShipTech1"
+---| "AlliedAntiNavyShipTech3"
+---| "AlliedAntiStructureShip"
+
+--- @alias AlliedGroundUnitName
+---| "AlliedAntiInfantryVehicle_Ground"
+---| "AlliedAntiAirVehicleTech1"
+---| "AlliedAntiVehicleVehicleTech1"
+---| "PrismTank"
+---| "AlliedAntiStructureVehicle"
+---| "AlliedAntiVehicleVehicleTech3"
+---| "AlliedFutureTank"
+
+--- These tramsformer units are built from warfactory but can transform into aircraft.
+--- @alias JapanAirUnitName
+---| "JapanAntiInfantryVehicle"
+---| "JapanAntiAirVehicleTech1"
+---| "JapanMissileMechaAdvanced"
+
+--- Antiair ship and interceptor aircraft are built from shipyard but can transform into aircraft.
+--- @alias JapanNavalUnitName
+---| "JapanNavyScoutShip"
+---| "JapanAntiVehicleVehicleTech1_Naval"
+---| "JapanAntiAirShip"
+---| "JapanAntiVehicleShip"
+---| "JapanInterceptorAircraft"
+---| "JapanAntiNavyShipTech3"
+---| "JapanAntiStructureShip"
+
+--- @alias JapanGroundUnitName
+---| "JapanAntiVehicleVehicleTech1"
+---| "JapanSentinelVehicle"
+---| "JapanAntiStructureVehicle"
+---| "JapanAntiVehicleVehicleTech3"
+---| "JapanMechaX"
+
+--- @alias NonCombatUnitName
+---| "AlliedMiner"
+---| "AlliedMCV"
+---| "JapanLightTransportVehicle"
+---| "JapanMiner"
+---| "JapanMCV"
+
+--- @alias CampaignUnitName
+---| "tankdestroyer"
+---| "DefenderAntiVehicleVehicleTech1"
+---| "AlliedArtilleryVehicle"
+---| "JapanFortressShip"
+
+--- NO CONSTRUCT COMMAND
+--- @alias SpecialUnitName 
+---| "AlliedGaintAircraftCarrier"  
+---| "AlliedHumveeVehicle" 
+
 --- "IMMOBILE"|"IGNORE_AI_COMMAND"|"REPAIR_ALLIES_WHEN_IDLE"|"CLEARED_FOR_LANDING"|"DAMAGED" | "REALLYDAMAGED" | "WATER_LOCOMOTOR_ACTIVE"
 
-
+--- @alias Player
+--- |"<1st Human Player's Allies incl Self>"
+--- | "PlyrCreeps"
+--- | "PlyrCivilian"
 
 --- @class PlayerUnitTable
 --- @field size integer The number of units for the player
@@ -166,17 +243,19 @@
 
 
 --- FCS Name Enum
---- @alias FCSName "AOLSCS"|"CSFAS"|"ATFACS"|"STBMFAS"|"CASCS"|"ECMICS"
+--- @alias FCSName "AOLSCS"|"CSFAS"|"ATFACS"|"STBMFAS"|"CASCS"|"ECMICS"|"STEIAS"
 
---- @alias Stance 0|1|2|3|4 -- Stance enum, 0: Other, 1: Aggressive, 2: Guard, 3: HoldPosition, 4: HoldFire
+--- @alias Stance "AGGRESSIVE"|"GUARD"|"HOLD_POSITION"|"HOLD_FIRE"|"OTHER" -- Stance enum, 0: Other, 1: Aggressive, 2: Guard, 3: HoldPosition, 4: HoldFire
 
 
 --- General Fire Control System (FCS) type
 ---@class FCS
 ---@field name FCSName The name of the FCS system
+---@field artillery_to_target_ratio integer The ratio of artillery to target
 ---@field isPrecisionStrike boolean Flag to indicate if the FCS is a precision strike system
+---@field isFullOverride boolean Flag to indicate if the FCS is a full override system on Unit Target Acquisition
 ---@field hp_threshold_LVT  integer The low value target (LVT) HP threshold for precision strike
----@field isHighValueTarget fun(self: FCS, target: StandardUnitType): boolean Function to check if the target is a high-value target
+---@field isHighValueTargetFn fun(target: StandardUnitType): boolean Function to check if the target is a high-value target
 ---@field isLowValueTarget fun(self: FCS, target: StandardUnitType): boolean Function to check if the target is a low-value target
 ---@field artillery_table UnitCollection The table of artillery units
 ---@field artillery_range integer The range of the artillery
@@ -186,7 +265,9 @@
 ---@field artillery_to_target_dict table<UnitID, StandardUnitType> Dictionary to store the target for the artillery
 ---@field artillery_stance_dict table<UnitID, Stance> Dictionary to store the stance of the artillery
 ---@field canAllocateTarget fun(self: FCS, target: StandardUnitType): boolean Function to check if the target can be allocated
+---@field _calculateTargetAllocationLimit fun(self: FCS, target: StandardUnitType): integer Function to calculate the target allocation limit
 ---@field canAllocateArtillery fun(self: FCS, artillery: StandardUnitType): boolean Function to check status of artillery to determine if it can be allocated
+---@field _stanceAllowArtilleyAllocation fun(self: FCS, artillery: StandardUnitType): boolean Function to check if the artillery stance allows allocation
 ---@field canAllocateArtilleryToTarget fun(self: FCS, artillery: StandardUnitType, target: StandardUnitType): boolean Function to check if the artillery can be allocated to the target
 ---@field allocateArtilleryToTarget fun(self: FCS, artillery: StandardUnitType, target: StandardUnitType) Function to allocate artillery to a target
 ---@field _assignTargetByID fun(self: FCS, targetID: UnitID) Function to assign a target to one or multiple artillery units
@@ -204,17 +285,15 @@
 ---@field _GLOBAL_TIMER_MAX integer The maximum value for the global timer before it resets
 ---@field _TARGET_ALLOCATION_RESET_INTERVAL table<FCSName, integer> Constant values for target allocation reset intervals (in seconds)
 ---@field _ARTILLERY_STANCE_RESET_INTERVAL table<FCSName, integer> Constant values for artillery stance reset intervals (in seconds)
----@field pve_target_visibility_dict table<UnitID, boolean> Dictionary to store the visibility of targets for human players in PVE
 ---@field AOLSCS FCS The FCS object for AOLSCS
 ---@field CSFAS FCS The FCS object for CSFAS
 ---@field ATFACS FCS The FCS object for ATFACS
 ---@field STBMFAS FCS The FCS object for STBMFAS
 ---@field CASCS FCS The FCS object for CASCS
 ---@field ECMICS FCS The FCS object for ECMICS
+---@field STEIAS FCS The FCS object for STEIAS
 ---@field updateTimers fun(self: FCS_Running_Data) Function to update the global timer
 ---@field getGlobalTimer fun(self: FCS_Running_Data): number Function to retrieve the current value of the global timer
----@field isTimeToResetArtilleryStanceInfo fun(self: FCS_Running_Data, fcs: FCSName): boolean Function to check if it's time to reset artillery stance info
----@field resetArtilleryStanceInfo fun(self: FCS_Running_Data, fcs_name: FCSName) Function to reset artillery stance info
 ---@field isTimeToResetTargetAllocation fun(self: FCS_Running_Data, fcs: FCSName): boolean Function to check if it's time to reset target allocation
 ---@field resetTargetAllocation fun(self: FCS_Running_Data, fcs: FCSName) Function to reset target allocation
 ---@field isTargetVisiblePVE fun (self: FCS_Running_Data, target: StandardUnitType): boolean Function to check if the target is visible for human players in PVE

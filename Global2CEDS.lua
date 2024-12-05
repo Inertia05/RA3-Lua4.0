@@ -145,13 +145,14 @@ local HEES = {
     --- @param unit StandardUnitType
     --- @return boolean
     isEvacAllowedByStance = function(self, unit)
-        return ObjectStanceIsHoldFire_Slow(unit) or ObjectStanceIsHoldPosition_Slow(unit)
+        return not ObjectStanceIsAggressive_Slow(unit)
     end,
 
     --- Check if the unit is in a stance that allows evacuation (defensive).
     --- @param unit StandardUnitType
     --- @return boolean
     isEvacAllowedByStanceDefensive = function(self, unit)
+        --- best suitted when gunship are being intercepted by enemy fighters
         return ObjectStanceIsHoldFire_Slow(unit)
     end,
 
@@ -367,30 +368,52 @@ function CreateEES(evac_table, evac_command, unit_type)
     end
 
     }
+
+    if (unit_type == "Sukhoi") then --- "Sukhoi" has no hold_position stance
+        IEES.evac_text = "SEES-ACTIVE"
+        IEES.standby_text = "SEES-STANDBY"
+
+        IEES.shouldEvacuateConservative = function(self, unit)
+            return ObjectStatusIsLightlyDamaged(unit) or ObjectStatusIsReallyDamaged(unit)
+        end
+
+        IEES.shouldEvacuateAggressive = function(self, unit)
+            return ObjectStatusIsReallyDamaged(unit)
+        end
+
+        IEES.isEvacAllowedByStance = function(self, unit)
+            return true -- always allow evacuation
+        end
+
+        IEES.isEvacAllowedByStanceDefensive = function(self, unit)
+            return ObjectStanceIsGuard_Slow(unit)
+        end
+    end
+
     if (unit_type == "Heavy_Bomber") or (unit_type == "Light_Bomber") then
         IEES.evac_text = "BEES-ACTIVE"
         IEES.standby_text = "BEES-STANDBY"
         IEES.isEvacAllowedByStance = function(self, unit)
-        return true -- always allow evacuation
+            return true -- always allow evacuation
         end
         IEES.isEvacAllowedByStanceDefensive = function(self, unit)
-        return not ObjectStanceIsAggressive_Slow(unit)
+            return not ObjectStanceIsAggressive_Slow(unit)
         end
     end
 
     if unit_type == "Heavy_Bomber" then
         IEES.shouldEvacuateAggressive = function(self, unit)
-        return ObjectStatusIsReallyDamaged(unit)
+            return ObjectStatusIsReallyDamaged(unit)
         end
         IEES.shouldEvacuateConservative = function(self, unit)
-        return ObjectStatusIsLightlyDamaged(unit) or ObjectStatusIsReallyDamaged(unit)
+            return ObjectStatusIsLightlyDamaged(unit) or ObjectStatusIsReallyDamaged(unit)
         end
     elseif unit_type == "Light_Bomber" then
         IEES.shouldEvacuateAggressive = function(self, unit)
-        return ObjectStatusIsLightlyDamaged(unit) or ObjectStatusIsReallyDamaged(unit)
+            return ObjectStatusIsLightlyDamaged(unit) or ObjectStatusIsReallyDamaged(unit)
         end
         IEES.shouldEvacuateConservative = function(self, unit)
-        return ObjectIsDamaged(unit)
+            return ObjectIsDamaged(unit)
         end
     end
   return IEES
@@ -407,7 +430,7 @@ EES_Running_Data = {
 
   CIEES = CreateEES(Celestial_Interceptor_table, "Command_CelestialFighterAircraftReturnToAirfield", nil),
 
-  SIEES = CreateEES(Soviet_Interceptor_table, "Command_SovietFighterAircraftReturnToAirfield", nil),
+  SIEES = CreateEES(Soviet_Interceptor_table, "Command_SovietFighterAircraftReturnToAirfield", "Sukhoi"),
 
   AHBEES = CreateEES(Allied_Heavy_Bomber_table, "Command_AlliedAntiGroundAircraftReturnToAirfield", "Heavy_Bomber"),
 
