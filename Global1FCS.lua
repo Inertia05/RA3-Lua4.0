@@ -1,6 +1,7 @@
 --- Update 2024/11/27
 --- @module "Global0VarFun" 
 --- @module "Global1FCS"
+---@diagnostic disable: unused-local
 if Global0VarFun == nil then
     if exMessageAppendToMessageArea then
         exMessageAppendToMessageArea("CRITICAL ERROR: Global0VarFun.lua is missing, reported by Global1FCS.lua")
@@ -17,7 +18,6 @@ if DEBUG_CORONA_INE then
 end
 DEBUG_ATFACS_ACTIVE = false
 DEBUG_CSFAS_ACTIVE = false
-
 
 --- @type FCSName[]
 local fcs_list = {}
@@ -77,7 +77,6 @@ FCS_Running_Data = {
     ECMICS = nil,
     --- @type FCS
     STEIAS = nil,
-
 
     --- Updates the global timer, resetting it if it reaches 0
     updateTimers = function(self)
@@ -154,7 +153,7 @@ FCS_Running_Data = {
     --- @param artillery_grouped table a dictionary that record if an artillery is already grouped
     --- @param player_index integer the index of the player
     --- @param fcs FCSName the name of the FCS
-    --- @param artillery_table UnitCollection the table of artillery
+    --- @param artillery_table HumanPlayerUnitCollection the table of artillery
     --- @return StandardUnitType[] the array of grouped units
     --- @return integer the size of the array
     _findAndGroupNearbyUnits = function (self, current, grouping_range_threshold,
@@ -165,10 +164,11 @@ FCS_Running_Data = {
         local fcs_group_size = 0
         --- @type FCS
         local fcs_data = FCS_Running_Data[fcs]
-        if count > 1 then --- no need to manage artillery that's alone
+        if count > 1 then --- no need to manage artillery that's alone in 2D space
             for j = 1, count, 1 do
                 local current_artillery = matchedObjects[j]
                 if ObjectIsAlive(current_artillery) then
+                    fcs_data:handleArtilleryFCSOverride(current_artillery)
                     local current_artillery_id = ObjectGetId(current_artillery)
                     if (current_artillery_id ~= nil and 
                         not fcs_data:isArtilleryAllocated(current_artillery)) then
@@ -187,6 +187,11 @@ FCS_Running_Data = {
                         end
                     end
                 end
+            end
+        else --- handle artillery that's spatially isolated
+            --- basically enable unit to auto acquire target without FCS
+            if fcs_data.isFullOverride and ObjectStatusIs(current, "NO_AUTO_ACQUIRE") then
+                ObjectSetObjectStatus_Slow(current, "NO_AUTO_ACQUIRE", false)
             end
         end
 
@@ -236,7 +241,7 @@ FCS_Running_Data = {
             target_lists.target_list_sizes[1] = true_count
 
             ---- High priority targets: enemy artillery. must be considered even if they are not in guaranteed_radius
-            local artilleryTargets, artilleryTargetCount = Area_Enemy_Kindof_search(cx, cy, cz, max_radius, 
+            local artilleryTargets, artilleryTargetCount = Area_Enemy_Kindof_search(cx, cy, cz, max_radius+50, 
             "SIEGE_WEAPON", current)
             target_lists[2] = artilleryTargets
             target_lists.target_list_sizes[2] = artilleryTargetCount
@@ -301,7 +306,7 @@ FCS_Running_Data = {
                 for target_index = 1, target_count, 1 do
                     local target = current_target_list[target_index]
                     if fcs_data:canAllocateTarget(target) then
-                        if fcs_data.isPrecisionStrike and (not ObjectIsStructure(target)) and
+                        if fcs_data.isPrecisionStrike and (not Object.isStructure(target)) and
                             fcs_data:isLowValueTarget(target) then
                             -- skip low value targets for precision strike in guaranteed_radius target allocation
                         else

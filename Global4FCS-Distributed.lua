@@ -1,6 +1,6 @@
 -- Celestial_Artillery_table
 ---@class FCS_Distributed
----@field artillery_table UnitCollection
+---@field artillery_table HumanPlayerUnitCollection
 ---@field range integer
 ---@field target_allocated_dict table<UnitID, integer>
 ---@field forbidden_target_dict table<UnitID, boolean>
@@ -81,7 +81,8 @@ FCS_D_CA = {
     end,
 
     allocateTarget = function(self, artillery, target)
-        UnitAttackTarget(artillery, target)
+        ObjectSetAssignedTarget(artillery, target)
+        --UnitAttackTarget(artillery, target)
         local target_id = ObjectGetId(target)
         if not target_id then
             _ALERT("Target ID is nil in FCS_Distributed:allocateTarget")
@@ -211,7 +212,6 @@ FCS_D = {
                     end
                 end
                 if fcs_d:canAllocateArtillery(current) then
-                    local x,y,z = ObjectGetIntPosition(current)
                     local matchedArtillery, artilleyCount = Unit_enemy_artillery_search(current, range)
 
                     local target_assigned = self:allocateArtilleryToTargets(fcs_d, current, matchedArtillery, artilleyCount)
@@ -252,7 +252,7 @@ FCS_D = {
 
     end,
 
-    allocateArtilleryToTargets = function(self, fcs_d, artillery, targetList, targetCount)
+    allocateArtilleryToTargets = function(_, fcs_d, artillery, targetList, targetCount)
         for target_index = 1, targetCount, 1 do
             local target = targetList[target_index]
             local target_id = ObjectGetId(target)
@@ -271,7 +271,7 @@ FCS_D = {
 
 
 IFF = {
-    markForbiddenTargets = function(self, player_index, fcs_d)
+    markForbiddenTargets = function(_, player_index, fcs_d)
         local rebuild_table = false
         local friendly_table = Celestial_Melee_Mech_table
         local size = friendly_table[player_index].size

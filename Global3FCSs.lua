@@ -15,18 +15,6 @@ if DEBUG_CORONA_INE then
         _ALERT("All global files loaded in order: Global1VarFun.lua, Global2CEDS.lua, Global3FCSs.lua")
     end
 end
---- A function that check if an object is not moving by checking its delta position
-function ObjectIsNotMoving(object)
-    if not ObjectIsAlive(object) then
-        _ALERT("ObjectIsNotMoving: object is not alive")
-        return false
-    end
-    local x, y, z = ObjectGetIntPosition(object)
-    local last_x, last_y, last_z = ObjectGetPreviousPosition(object)
-    local dx2, dy2, dz2 = tolerant_floor((x - last_x)^2), tolerant_floor((y - last_y)^2), tolerant_floor((z - last_z)^2)
-    local threshold = 1
-    return dx2 < threshold and dy2 < threshold and dz2 < threshold
-end
 
 -- AOLSCS-ACTIVE
 -- "盟军轨道激光打击协调系统(AOLSCS)已启动, 警戒模式攻击优先，固守模式移动优先，侵略模式系统关闭"
@@ -130,7 +118,7 @@ local createFCS = function(name, artillery_range, artillery_grouping_range_thres
 
         end,
 
-        _calculateTargetAllocationLimit = function(self, target)
+        _calculateTargetAllocationLimit = function(self, _)
             return self.artillery_to_target_ratio
         end,
             
@@ -148,8 +136,8 @@ local createFCS = function(name, artillery_range, artillery_grouping_range_thres
             return ret
         end,
 
-        _stanceAllowArtilleyAllocation = function(self, artillery)
-            local stance = self:_getArtilleryStance(artillery) 
+        _stanceAllowArtilleyAllocation = function(_, artillery)
+            local stance = ObjectGetDelayedStance(artillery)
             if stance == "GUARD" and not ObjectTestModelCondition(artillery, "MOVING") then
                 return true
             elseif stance == "HOLD_POSITION" then
@@ -279,31 +267,26 @@ local createFCS = function(name, artillery_range, artillery_grouping_range_thres
             return self.artillery_allocated_dict[artillery_id] ~= nil
         end,
 
-        --- Get artillery stored stance
-        --- @param self FCS
-        --- @param artillery StandardUnitType The artillery unit to check
-        --- @return Stance The stance of the artillery
-        _getArtilleryStance = function(self, artillery)
-            DEBUG_assert(artillery, "FCS_Running_Data."..self.name..":_getArtilleryStance: artillery is nil")
+        handleArtilleryFCSOverride = function(self, artillery)
+            if not self.isFullOverride then
+                return
+            end
             local stance = ObjectGetDelayedStance(artillery)
-            if self.isFullOverride then
-                if (stance == "HOLD_POSITION") or (stance == "GUARD") then
-                    ObjectSetObjectStatus(artillery, "NO_AUTO_ACQUIRE")
-                    --- prevent the artillery from acquiring new target by itself to avoid waste of precision strike
-                else
-                    if ObjectStatusIs(artillery, "NO_AUTO_ACQUIRE") then
-                        ObjectSetObjectStatus_Slow(artillery, "NO_AUTO_ACQUIRE", false)
-                    end
+            if (stance == "HOLD_POSITION") or (stance == "GUARD") then
+                ObjectSetObjectStatus(artillery, "NO_AUTO_ACQUIRE")
+                --- prevent the artillery from acquiring new target by itself to avoid waste of precision strike
+            else
+                if ObjectStatusIs(artillery, "NO_AUTO_ACQUIRE") then
+                    ObjectSetObjectStatus_Slow(artillery, "NO_AUTO_ACQUIRE", false)
                 end
             end
-            return stance
         end,
 
         
 
-        _orderAttack = function(self, artillery, target)
+        _orderAttack = function(_, artillery, target)
             ---UnitShowInfoBox(target, "Attack", 1)
-            UnitAttackTarget(artillery, target)
+            ObjectSetAssignedTarget(artillery, target)
         end,
 
     }
@@ -314,7 +297,7 @@ Athena_table = CreateUnitTable({"AlliedAntiStructureVehicle"})
 
 
 local AOLSCS = createFCS("Allied Orbital Laser Strike Coordination System (AOLSCS)", 
-1400,200, Athena_table)
+1450,200, Athena_table)
 AOLSCS.artillery_to_target_ratio = 2
 AOLSCS._calculateTargetAllocationLimit = function(self, target)
     local initial_health = ObjectGetInitialIntHealth(target)
@@ -342,17 +325,17 @@ FCS_Running_Data.CASCS = CASCS
 
 Celestial_Advanced_Bomber_table = CreateUnitTable({"CelestialAdvanceAircraftTech4"})
 
-FilterCAAT4Target = CreateObjectFilter({
-    IncludeThing={
-        "CelestialAdvanceAircraftTech4Target"
-    },
-})
+-- FilterCAAT4Target = CreateObjectFilter({
+--     IncludeThing={
+--         "CelestialAdvanceAircraftTech4Target"
+--     },
+-- })
 local CSFAS = createFCS("Celestial Suborbital Fire Allocation System (CSFAS)",
 1050,200, Celestial_Advanced_Bomber_table)
 -- 3D range = 750, buffed to 1125(750*1.5)
 -- 2D range = 700, buffed to 1050(700*1.5)
 CSFAS.hp_threshold_LVT = 1000
-CSFAS.canAllocateArtillery = function(self, artillery)
+CSFAS.canAllocateArtillery = function(_, artillery)
     if not ObjectStatusIs(artillery, "IMMOBILE") then
         return false
     end
@@ -360,7 +343,7 @@ CSFAS.canAllocateArtillery = function(self, artillery)
         return false
     end
 
-    if self:_getArtilleryStance(artillery) == "HOLD_POSITION" then -- "HoldPosition"
+    if ObjectGetDelayedStance(artillery) == "HOLD_POSITION" then -- "HoldPosition"
     -- 无法命令期：
     -- IS_RELOADING_WEAPON 存在 或 IGNORE_AI_COMMAND 存在
         -- 非无法命令期
@@ -392,13 +375,18 @@ CSFAS.canAllocateArtilleryToTarget = function(self, artillery, target)
     -- the railgun should only target units that are far away to avoid friendly fire
 end
 
+CSFAS._orderAttack = function(_, artillery, target)
+    --ObjectSetAssignedTarget(artillery, nil)
+    UnitAttackTarget(artillery, target)
+end
+
 FCS_Running_Data.CSFAS = CSFAS
 
 
 
 V4_table = CreateUnitTable({"SovietAntiStructureVehicle"})
 local STBMFAS = createFCS("Soviet Tactical Ballistic Missile Fire Allocation System (STBMFAS)",
-1400,200, V4_table)
+1450,200, V4_table)
 --- time based target allocation
 --- current allocation logic:
 --- 1 missile per target per cycle (reload = 10 second)
@@ -411,23 +399,23 @@ FCS_Running_Data.STBMFAS = STBMFAS
 
 
 
-Future_Tank_table = CreateUnitTable({"AlliedFutureTank"})
-local ATFACS = createFCS("Allied Tactical Fire Allocation and Coordination System(ATFACS)",
-350,100, Future_Tank_table)
-ATFACS.canAllocateArtillery = function(self, artillery)
-    return (
-    (not ObjectStatusIs(artillery, "IGNORE_AI_COMMAND"))
-    and self:_getArtilleryStance(artillery) == "HOLD_POSITION" 
-    and UnitSpecialAbilityReady_Slow(artillery, "SpecialPower_AlliedFutureTankLaserWeapon")
-    -- do not allocate unit that's not ready to fire
-    )
-end
-ATFACS._orderAttack = function(self, artillery, target)
-    UnitUseAbilityOnTarget(artillery, "Command_AlliedFutureTankLaserWeapon", target)
-end
-ATFACS.isPrecisionStrike = false
-ATFACS.isFullOverride = false
-FCS_Running_Data.ATFACS = ATFACS
+-- Future_Tank_table = CreateUnitTable({"AlliedFutureTank"})
+-- local ATFACS = createFCS("Allied Tactical Fire Allocation and Coordination System(ATFACS)",
+-- 350,100, Future_Tank_table)
+-- ATFACS.canAllocateArtillery = function(self, artillery)
+--     return (
+--     (not ObjectStatusIs(artillery, "IGNORE_AI_COMMAND"))
+--     and ObjectGetDelayedStance(artillery) == "HOLD_POSITION" 
+--     and UnitSpecialPowerReady_Slow(artillery, "SpecialPower_AlliedFutureTankLaserWeapon")
+--     -- do not allocate unit that's not ready to fire
+--     )
+-- end
+-- ATFACS._orderAttack = function(self, artillery, target)
+--     UnitUseAbilityOnTarget(artillery, "Command_AlliedFutureTankLaserWeapon", target)
+-- end
+-- ATFACS.isPrecisionStrike = false
+-- ATFACS.isFullOverride = false
+-- FCS_Running_Data.ATFACS = ATFACS
 
 
 Terror_Drone_table = CreateUnitTable({"SovietScoutVehicle"})
@@ -458,14 +446,14 @@ Japan_Cruise_Missile_table = CreateUnitTable({"JapanInterceptorAircraft"})
 local ECMICS = createFCS("Empire Cruise Missile Integrated Command System (ECMICS)",
 500,200, Japan_Cruise_Missile_table)
 ECMICS.artillery_to_target_ratio = 1
-ECMICS._stanceAllowArtilleyAllocation = function(self, artillery)
+ECMICS._stanceAllowArtilleyAllocation = function(_, artillery)
     if not ObjectStatusIs(artillery, "AIRBORNE_TARGET") then
         return false
     end
     if ObjectStatusIs(artillery, "IGNORE_AI_COMMAND") then
         return false
     end
-    local stance = self:_getArtilleryStance(artillery) 
+    local stance = ObjectGetDelayedStance(artillery) 
     if stance == "GUARD" and not ObjectTestModelCondition(artillery, "MOVING") then
         return true
     elseif stance == "HOLD_POSITION" then

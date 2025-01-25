@@ -20,6 +20,12 @@ function _ALERT(s)
     ExecuteAction("DEBUG_STRING", "Lua Alert: " .. (s or "no debug message"))
 end
 
+-- This function is used to print message to lower left corner of the screen
+---@param s string
+function print(s)
+  exMessageAppendToMessageArea(s)
+end
+
 function DEBUG_error(s)
   if DEBUG_CORONA_INE then
     error(s)
@@ -29,6 +35,18 @@ end
 function DEBUG_assert(condition, s)
   if DEBUG_CORONA_INE then
     assert(condition, s)
+  end
+end
+
+function PerformanceTestClockStart()
+  if PerformanceTest and PerformanceTestDuration then
+    HighResolutionClock()
+  end
+end
+
+function PerformanceTestClockEndAndRecord(duration_name)
+  if PerformanceTest and PerformanceTestDuration then
+    PerformanceTestDuration[duration_name] = tolerant_floor(HighResolutionClock() / 1000)
   end
 end
 
@@ -63,6 +81,9 @@ end
 ---@return integer
 ---@return integer
 function ObjectGetIntPosition(object)
+  if object == nil then
+    error("ObjectGetIntPosition: object is nil")
+  end
   local x,y,z = ObjectGetPosition(object)
   return tolerant_floor(x), tolerant_floor(y), tolerant_floor(z)
 end
@@ -152,7 +173,7 @@ end
 --- "PlyrNeutral/teamPlyrNeutral" doesn't work
 --- "SkirmishAllies/teamSkirmishAllies", doesn't work
 ---@param instance_name string must be unique, example "SpawnedUnit-1"
----@param class_name string example JapanAntiVehicleInfantryTech3
+---@param class_name CombatUnitName|SpecialUnitName example JapanAntiVehicleInfantryTech3
 ---@param team string example "Player_1/teamPlayer_1" or "/team" or "PlyrCreeps/teamPlyrCreeps"
 ---@param x number
 ---@param y number
@@ -214,12 +235,17 @@ Duration3600S = 108000 -- 3600s = 60min = 108000frames
 --地编中的核弹无畏实现方式
 --在无畏的导弹上刷一个物体(527)，这个物体会跟随无畏的导弹移动。当无畏的导弹被摧毁时，在刷出的物体上刷个核弹
 
-Century_bomb_filter = CreateObjectFilter({
-  IncludeThing={
-    "CenturyBomber_HugeBombProjectile",
-    --"SovietBomberAircraftBombProjectile",
-    },
-  })
+--- @type Player[]
+Player_list = {
+    [1] = "Player_1",
+    [2] = "Player_2",
+    [3] = "Player_3",
+    [4] = "Player_4",
+    [5] = "Player_5",
+    [6] = "Player_6",
+    [7] = "PlyrCivilian",
+    [8] = "PlyrCreeps",
+}
 
 Missile_table = {
   size = 0,
@@ -236,20 +262,6 @@ Athena_laser_table = {
   team = {},
   ori = {}
 }
-
-
---  AIRCRAFT INFANTRY SHIP SUBMARINE VEHICLE"
-FilterSelectable = CreateObjectFilter({
-  Rule="ANY",
-  Include="SELECTABLE",
-  IncludeThing={}
-})
-
-FilterStructure = CreateObjectFilter({
-  Rule="ANY",
-  Include="STRUCTURE",
-  IncludeThing={}
-})
 
 FilterEnemySelectable = CreateObjectFilter({
     Rule="ANY",
@@ -301,19 +313,8 @@ FilterVehicleSurfaceOnly = CreateObjectFilter({
 })
 
 
-FilterFriendlySelectable = CreateObjectFilter({
-    Rule="ANY",
-    Relationship = "ALLIES",
-    Include = "SELECTABLE",
-    IncludeThing = {}
-})
-
 function Missile_position_from_location_table(index)
   return Missile_table.positions[index][1], Missile_table.positions[index][2], Missile_table.positions[index][3]
-end
-
-function Athena_laser_position_from_location_table(index)
-  return Athena_laser_table.positions[index][1], Athena_laser_table.positions[index][2], Athena_laser_table.positions[index][3]
 end
 
 function Remove_missile_from_table(index)
@@ -338,13 +339,10 @@ function Remove_Athena_laser_from_table(index)
   Athena_laser_table.size = Athena_laser_table.size - 1
 end
 
-
-
-
 Athena_Offsets = _CalculateTriangleOffsets(50)
 
 -- This function should only be called once per radius value, per id, per team, per frame
-function _Spawn_Athena_laser_in_triangle(x,y,z,id, dur, radius, team, ori, offsets)
+function _Spawn_Athena_laser_in_triangle(x,y,z,id, dur, radius, team, ori, offsets, enhanced, identifier_status)
   if radius == nil then
     radius = 50
   end
@@ -361,39 +359,21 @@ function _Spawn_Athena_laser_in_triangle(x,y,z,id, dur, radius, team, ori, offse
   if ran < 1 then
     ran = 1
   end
+  local laser_class = "alliedantistructurevehiclecannoneffect"
+  if enhanced then
+    laser_class = "AlliedAntiStructureVehicleCannonEffect_Enhanced"
+  end
 
 
   for j = 1, 4, 1 do
     local spawn_name = "SpawnedSatelliteLaser-"..tostring(id).."-"..tostring(dur)..tostring(radius).."-"..tostring(j)
     local dx = offsets[ran][j].x -- (GetRandomNumber()-0.5)*100
     local dy = offsets[ran][j].y -- (GetRandomNumber()-0.5)*100
-    ObjectSpawnNamed_Slow(spawn_name, "alliedantistructurevehiclecannoneffect", 
+    ObjectSpawnNamed_Slow(spawn_name, laser_class, 
     team, x+dx, y+dy, z, 30)
-    ExecuteAction("UNIT_CHANGE_OBJECT_STATUS", spawn_name, "OVERCHARGING_WEAPON", "true")
+    ExecuteAction("UNIT_CHANGE_OBJECT_STATUS", spawn_name, identifier_status, "true")
   end
 end
-
-
-
-
-
---- Function for debug, spawn a JapanAntiVehicleInfantryTech3 at position (x,y,z)
---- @param x number
---- @param y number
---- @param z number
-function Debug_spawn_at_position(x,y,z)
-  ObjectSpawnUnnamed_Slow("JapanAntiVehicleInfantryTech3","Player_1/teamPlayer_1", x, y, z, 30)
-end
-
---- Function for debug, spawn an enemy unit at position (x,y,z)
---- @param x number
---- @param y number
---- @param z number
---- @param unit_name string
-function Debug_spawn_enemy_at_position(x,y,z, unit_name)
-  ObjectSpawnUnnamed_Slow(unit_name, "PlyrCreeps/teamPlyrCreeps", x, y, z, 30)
-end
-
 
 
 
@@ -419,28 +399,22 @@ end
 ---@param y number 
 ---@param z number 
 ---@param radius number The radius of the area, centered at (x,y,z)
----@param iff_ref_object StandardUnitType The reference object for Identifying Friend or Foe (IFF)
+---@param iff_object StandardUnitType The reference object for Identifying Friend or Foe (IFF)
 ---@return StandardUnitType[]
 ---@return number
-function Area_enemy_search_surface_only(x,y,z, radius, iff_ref_object)
-  local matchedObjects, count = ObjectFindObjects(iff_ref_object,
-  {X = x, Y = y, Z = z, Radius = radius, DistType = "CENTER_2D"},
-  FilterEnemySelectableSurfaceOnly)
-  return matchedObjects, count
+function Area_enemy_search_surface_only(x,y,z, radius, iff_object)
+  local area = {X=x, Y=y, Z=z, Radius=radius, DistType="CENTER_2D"}
+  return Area_filter_search(area, FilterEnemySelectableSurfaceOnly, iff_object)
 end
 
-function Area_enemy_structure_search(x,y,z, radius, ref_object)
-  local matchedObjects, count = ObjectFindObjects(ref_object, 
-  {X=x, Y=y, Z=z, Radius=radius, DistType="CENTER_2D"}, 
-  FilterEnemyStructure)
-  return matchedObjects, count
+function Area_enemy_structure_search(x,y,z, radius, iff_object)
+  local area = {X=x, Y=y, Z=z, Radius=radius, DistType="CENTER_2D"}
+  return Area_filter_search(area, FilterEnemyStructure, iff_object)
 end
 
-function Area_enemy_surface_unit_search(x,y,z, radius, ref_object)
-  local matchedObjects, count = ObjectFindObjects(ref_object, 
-  {X=x, Y=y, Z=z, Radius=radius, DistType="CENTER_2D"}, 
-  FilterEnemyUnitSurfaceOnly)
-  return matchedObjects, count
+function Area_enemy_surface_unit_search(x,y,z, radius, iff_object)
+  local area = {X=x, Y=y, Z=z, Radius=radius, DistType="CENTER_2D"}
+  return Area_filter_search(area, FilterEnemyUnitSurfaceOnly, iff_object)
 end
 
 -- This function find everything in the map, including tree, building, unit, missile, drone, etc
@@ -451,57 +425,41 @@ end
 
 -- This function find everything in the map that match the filter
 -- Filter should not contain relationship since this function do not take in unit as reference for relationship check
+---@param filter ObjectFilter
+---@return StandardUnitType[]
+---@return integer
 function Map_filter_search(filter)
+  if not filter then
+    error("Map_filter_search: filter is nil")
+  end
   local matchedObjects, count = ObjectFindObjects(nil, nil, filter)
+  if type(count) ~= "number" or type(matchedObjects) ~= "table" then
+    --- ex: it found no matching unit in the map
+    _ALERT("Map_filter_search: ObjectFindObjects failed, count type is "..type(count).." matchedObjects type is "..type(matchedObjects))
+    return {}, 0
+  end
   return matchedObjects, count
 end
 
-
--- This function output debug string to debug console when the game is running
-function ShowDebugString(str)
-  ExecuteAction("DEBUG_STRING", str)
-end
-
-
-
--- This function search for objects in the map that match the filter, and then filter the result by distance to a point
----- Warning: Desync risk due to searching everything in the map
-function Map_filter_search_radius_limited(x,y,z, radius, filter)
-  local matchedObjects, count = Map_filter_search(filter)
-  local newArray = {}  -- This will store the filtered elements
-  local newSize = 0     -- This will store the new size of the filtered array
-  local radius_sqr = tolerant_floor(radius * radius)
-  for i = 1, count, 1 do
-    local cx, cy, cz = ObjectGetIntPosition(matchedObjects[i])
-    local distance_sqr = tolerant_floor(((cx-x)^2 + (cy-y)^2 + (cz-z)^2))
-    if distance_sqr < radius_sqr then
-        newSize = newSize + 1
-        newArray[newSize] = matchedObjects[i]
-    end
-  end
-  
-  return newArray, newSize
-end
-
-
-
 -- This function search for everything in an area, and then filter the result by the filter(ignore relationship)
-function Area_filter_search(x,y,z, radius, filter)
-  local matchedObjects, count = Area_search(x,y,z, radius)
-  local newArray = {}  -- This will store the filtered elements
-  local newSize = 0     -- This will store the new size of the filtered array
-  --ShowDebugString("count: "..count)
-  
-  for i = 1, count, 1 do
-      if ObjectTestTargetObjectWithFilter(nil, matchedObjects[i], filter) then
-          --ShowDebugString("matchedObjects[i] found, i = "..i)
-          newSize = newSize + 1
-          newArray[newSize] = matchedObjects[i]
-      end
+---@param area AreaParams
+---@param filter ObjectFilter
+---@param iff_ref_object StandardUnitType
+---@return StandardUnitType[],integer
+function Area_filter_search(area, filter, iff_ref_object)
+  if not filter then
+    error("Area_filter_search: filter is nil")
   end
-  --ShowDebugString("newSize: "..newSize)
-  
-  return newArray, newSize
+  if not area then
+    error("Area_filter_search: area is nil")
+  end
+  local matchedObjects, count = ObjectFindObjects(iff_ref_object, area, filter)
+  if type(count) ~= "number" or type(matchedObjects) ~= "table" then
+    --- ex: it found no enemy unit in the area
+    count = 0
+    return {}, count
+  end
+  return matchedObjects, count
 end
 
 -- This function search for units that are friendly to the reference object in an area
@@ -520,49 +478,10 @@ function Area_Friendly_Unit_filter_search(current, radius, filter_friendly)
     return {}, 0
   end
   local x,y,z = ObjectGetIntPosition(current)
-  local matchedObjects, count = ObjectFindObjects(current,
-  {X=x, Y=y, Z=z, Radius=radius, DistType="CENTER_2D"}, 
-  filter_friendly)
+  local matchedObjects, count = Area_filter_search({X=x, Y=y, Z=z, Radius=radius, DistType="CENTER_2D"}, filter_friendly, current)
   return matchedObjects, count
 end
 
-
-
-
-ExecuteAction("OBJECTLIST_ADDOBJECTTYPE", "AlliedAirfield","FactoryList")
-ExecuteAction("OBJECTLIST_ADDOBJECTTYPE", "AlliedNavalYard", "FactoryList")
-ExecuteAction("OBJECTLIST_ADDOBJECTTYPE", "AlliedWarFactory", "FactoryList")
-ExecuteAction("OBJECTLIST_ADDOBJECTTYPE", "AlliedBarracks", "FactoryList")
-ExecuteAction("OBJECTLIST_ADDOBJECTTYPE", "JapanConstructionYard", "FactoryList")
-ExecuteAction("OBJECTLIST_ADDOBJECTTYPE", "JapanNavalYard", "FactoryList")
-ExecuteAction("OBJECTLIST_ADDOBJECTTYPE", "JapanWarFactory", "FactoryList")
-ExecuteAction("OBJECTLIST_ADDOBJECTTYPE", "JapanBarracks", "FactoryList")
-
-
-
-
-ExistingObjects = {size = 0}
-
--- Define a function to check if the newly found object is an existing object
--- ExistingObjects must have a size field
-function IsNewObject(existingObjects, newObject, size)
-  -- Iterate through the list of existing objects up to the given size
-  if size == nil then
-    size = existingObjects.size
-  end
-  for i = 1, size, 1 do
-      -- Use the provided function to check if the objects are the same
-      local existingObject = existingObjects[i]
-      if existingObject then
-        if ObjectsIsSame(existingObjects[i], newObject) then
-            -- If they are the same, return false (the object already exists)
-            return false
-        end
-      end
-  end
-  -- If no match was found, return true (the object is new)
-  return true
-end
 
 
 -- ***********************************************************************************
@@ -582,16 +501,20 @@ end
 
 
 --- This function check if the object has the status
---- The status is a string, such as "DAMAGED", "REALLYDAMAGED", "REPAIR_ALLIES_WHEN_IDLE"
+--- The status is a string, such as "REPAIR_ALLIES_WHEN_IDLE"
 --- @param current StandardUnitType
 --- @param status ObjectStatus
 --- @return boolean
 function ObjectStatusIs(current, status)
-  local filter = CreateObjectFilter({
-    Rule="ALL",
-    IncludeThing = {},
-    StatusBitFlags = status, -- Ex: "REPAIR_ALLIES_WHEN_IDLE",
-  })
+  local filter = FilterObjectStatus.getFilter(status)
+  return ObjectTestTargetObjectWithFilter(nil, current, filter)
+end
+
+--- @param current StandardUnitType
+--- @param status ObjectStatus
+--- @return boolean
+function ObjectStatusIsNot(current, status)
+  local filter = FilterObjectStatus.getFilterExclude(status)
   return ObjectTestTargetObjectWithFilter(nil, current, filter)
 end
 
@@ -600,31 +523,67 @@ end
 function ObjectIsDamaged(current)
   local health = ObjectGetCurrentIntHealth(current) -- 当前血量
   local initialHealth = ObjectGetInitialIntHealth(current) -- 初始血量
-  return health < initialHealth
+  if health < initialHealth then
+    return true
+  end
+  local id = ObjectGetId(current)
+  if not id then
+    _ALERT("ObjectIsDamaged: id is nil")
+    return false
+  end
+  return ObjectStatusIs(current, "HAS_SECONDARY_DAMAGE")
 end
 
--- This function check if the object is lightly damaged(health bar is yellow)
----@param current StandardUnitType
-function ObjectStatusIsLightlyDamaged_Slow(current)
-  return EvaluateCondition("UNIT_HAS_OBJECT_STATUS", current, "DAMAGED")
+function ObjectIsUndamaged(current)
+  local health = ObjectGetCurrentIntHealth(current)
+  local initialHealth = ObjectGetInitialIntHealth(current)
+  if health < initialHealth then
+    return false
+  end
+  local id = ObjectGetId(current)
+  if not id then
+    _ALERT("ObjectIsUndamaged: id is nil")
+    return false
+  end
+  return ObjectStatusIsNot(current, "HAS_SECONDARY_DAMAGE")
 end
 
 --100-66绿血， 65-33黄血， 32-0红血
 ---@param current StandardUnitType
-function ObjectStatusIsLightlyDamaged(current)
-  return ObjectStatusIs(current, "DAMAGED")
-end
-
--- This function check if the object is really damaged(health bar is red)
----@param current StandardUnitType
-function ObjectStatusIsReallyDamaged_Slow(current)
-  return EvaluateCondition("UNIT_HAS_OBJECT_STATUS", current, "REALLYDAMAGED")
+function ObjectStatusIsAtLeastLightlyDamaged(current)
+  local initialHealth = ObjectGetInitialIntHealth(current)
+  local health = ObjectGetCurrentIntHealth(current)
+  local yellow_health = tolerant_floor(initialHealth * 0.66)
+  if health < yellow_health then
+    return true
+  end
+  local id = ObjectGetId(current)
+  if not id then
+    _ALERT("ObjectStatusIsAtLeastLightlyDamaged: id is nil")
+    return false
+  end
+  local frozen_damage = exObjectGetCurrentSecondaryDamage(id)
+  local yellow_health_loss = tolerant_floor(initialHealth * 0.33)
+  return frozen_damage > yellow_health_loss
 end
 
 --100-66绿血， 65-33黄血， 32-0红血
 ---@param current StandardUnitType
 function ObjectStatusIsReallyDamaged(current)
-  return ObjectStatusIs(current, "REALLYDAMAGED")
+  local initialHealth = ObjectGetInitialIntHealth(current)
+  local health = ObjectGetCurrentIntHealth(current)
+  local red_health = tolerant_floor(initialHealth * 0.33)
+  if health < red_health then
+    return true
+  end
+  local id = ObjectGetId(current)
+  if not id then
+    _ALERT("ObjectStatusIsReallyDamaged: id is nil")
+    return false
+  end
+  local frozen_damage = exObjectGetCurrentSecondaryDamage(id)
+  local red_health_loss = tolerant_floor(initialHealth * 0.66)
+  return frozen_damage > red_health_loss
 end
 
 --- Checks if the object is of a specific unit type.
@@ -648,18 +607,13 @@ function ObjectIsKindOf(object, kindOf)
   return ObjectTestTargetObjectWithFilter(nil, object, filter)
 end
 
---- Checks if the object is structure
---- @param object StandardUnitType The object to check.
---- @return boolean True if the object is structure, false otherwise.
-function ObjectIsStructure(object)
-  return ObjectIsKindOf(object, "STRUCTURE")
-end
-
+--- 1600 ns per call
 function ObjectStanceIsAggressive_Slow(current)
   return EvaluateCondition("UNIT_USING_STANCE", current, "AGGRESSIVE")
 end
 
--- This function check if the object is in GUARD stance
+--- This function check if the object is in GUARD stance
+--- 800 ns per call
 --- @param current StandardUnitType
 --- @return boolean
 function ObjectStanceIsGuard_Slow(current)
@@ -679,7 +633,9 @@ function ObjectStanceIsHoldFire_Slow(current)
   return EvaluateCondition("UNIT_USING_STANCE", current, "HOLD_FIRE")
 end
 
--- This function set Object Status of the object
+--- This function set Object Status of the object. 
+--- This is the slow version: 1000 ns per call
+--- ObjectSetObjectStatus is the fast version: 50 ns per call
 --- @param current StandardUnitType
 --- @param status ObjectStatus
 --- @param bool boolean
@@ -751,24 +707,8 @@ function UnitShowInfoBox(current, text_reference_name, time)
   ExecuteAction("NAMED_SHOW_INFOBOX", current, text_reference_name, time, "???")
 end
 
-
--- This function show a info box with text keep changing per call
--- Maybe due to the "BUG:" in the text
--- Each time this is called it create a new object and it won't get removed
--- This will cause huge lag if called in a loop in tens of seconds
-function __DebugUnitShowInfoBox_HugeLagInLoop(current,time)
-  UnitShowInfoBox(current, "DEBUG", time)
-  -- make sure the text in map.str is like these below
-  -- the string start with BUG: and followed by some text with no space
-  --  COOL-DOWN-BUG
-  -- "BUG:mytext"
-  -- END
-
-  -- COOL-DOWN-BUG2
-  -- "BUG:冷却时间小于0"
-  -- END
-end
-
+---@param current StandardUnitType
+---@param ability_name Command
 function UnitUseAbility(current, ability_name)
   ExecuteAction("NAMED_USE_COMMANDBUTTON_ABILITY", current, ability_name)
 end
@@ -784,9 +724,9 @@ end
 
 --- This function check if the unit is ready to use the special ability
 --- @param current StandardUnitType
---- @param special_ability_name "SpecialPower_AlliedFutureTankLaserWeapon"
-function UnitSpecialAbilityReady_Slow(current, special_ability_name)
-  return EvaluateCondition("UNIT_SPECIAL_POWER_READY", current, special_ability_name)
+--- @param special_power_name SpecialPower
+function UnitSpecialPowerReady_Slow(current, special_power_name)
+  return EvaluateCondition("UNIT_SPECIAL_POWER_READY", current, special_power_name)
 end
 
 
@@ -797,7 +737,6 @@ function _Add_Current_to_Table(table, current)
     _ALERT("_Add_Current_to_Table: current is nil")
     return
   end
-  local unit_id = ObjectGetId(current)
   if ObjectPlayerScriptName(current) == "Player_1" then
     player_index = 1
   elseif ObjectPlayerScriptName(current) == "Player_2" then
@@ -843,11 +782,11 @@ end
 -- When a unit is dead, it's expected to be set to nil in the table.
 -- For example table[player_index][unit_index] = nil means the unit is marked as dead but not removed from the table
 -- Time complexity: O(n) where n is the size of the table
----@param table UnitCollection
+---@param table HumanPlayerUnitCollection
 ---@param player_index integer
 ---@return nil
 function _Rebuild_Table_with_Nils_Removed(table, player_index)
-  --- @type PlayerUnitTable
+  --- @type CEDSUnitTable
   local new_table = {
     size = 0,
     time = {},
@@ -856,7 +795,7 @@ function _Rebuild_Table_with_Nils_Removed(table, player_index)
     cooldown_dict = {}
   }
   if table[player_index] == nil then
-    _ALERT("_Rebuild_Table_with_Nils_Removed: UnitCollection is nil. player_index = "..tostring(player_index))
+    _ALERT("_Rebuild_Table_with_Nils_Removed: HumanPlayerUnitCollection is nil. player_index = "..tostring(player_index))
     return
   end
 
